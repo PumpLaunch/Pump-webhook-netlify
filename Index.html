@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CryptoFlux Pro - Pump.fun Sniper</title>
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0e27;
+      --card: #131937;
+      --border: #2a3457;
+      --text: #ffffff;
+      --text-secondary: #8892b0;
+      --green: #00ff88;
+      --purple: #9945ff;
+      --red: #ff3366;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      line-height: 1.5;
+      padding: 16px;
+    }
+    .container { max-width: 700px; margin: 0 auto; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      font-size: 1.6rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--purple), var(--green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--purple), var(--green));
+      color: white;
+    }
+    .btn-danger {
+      background: var(--red);
+      color: white;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.2rem;
+      margin-bottom: 1.2rem;
+    }
+    .signal-item {
+      background: rgba(153, 69, 255, 0.1);
+      border-left: 3px solid var(--purple);
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 8px;
+    }
+    .status {
+      font-family: monospace;
+      color: var(--text-secondary);
+      margin-top: 12px;
+      font-size: 0.9rem;
+    }
+    label {
+      display: block;
+      margin: 8px 0 4px;
+      font-weight: 500;
+    }
+    input, select {
+      width: 100%;
+      padding: 6px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: white;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">CryptoFlux Pro</div>
+      <button id="connectBtn" class="btn btn-primary" disabled>Connecter Wallet</button>
+    </div>
+
+    <div id="app" style="display:none;">
+      <div class="card">
+        <div><strong>Adresse :</strong> <span id="address">...</span></div>
+        <div><strong>Solde :</strong> <span id="balance">0.00</span> SOL</div>
+        <div><strong>Réseau :</strong> Mainnet</div>
+      </div>
+
+      <div class="card">
+        <h3>⚙️ Paramètres</h3>
+        <label>Achat (SOL):</label>
+        <input type="number" id="buyAmount" value="0.05" step="0.01" min="0.01">
+        
+        <label>Profit cible (%):</label>
+        <input type="number" id="profitTarget" value="50" min="1" placeholder="Ex: 50 = +50%">
+        
+        <label>Âge max (sec):</label>
+        <input type="number" id="maxAge" value="300" min="10">
+        
+        <label>Marketcap min ($):</label>
+        <input type="number" id="minMarketcap" value="10000" min="0">
+        
+        <label>Détenteurs min:</label>
+        <input type="number" id="minHolders" value="50" min="1">
+        
+        <label>Frais prioritaires:</label>
+        <select id="priorityFee">
+          <option value="100000">Élevé</option>
+          <option value="1000000">Turbo</option>
+          <option value="5000000">Extrême</option>
+        </select>
+        
+        <button id="toggleScan" class="btn btn-primary" style="margin-top: 12px;">▶️ Démarrer le Scan</button>
+      </div>
+
+      <div class="card">
+        <h3>🔔 Positions actives</h3>
+        <div id="positions">Aucune position</div>
+      </div>
+    </div>
+
+    <div id="status" class="status">Vérification du wallet...</div>
+  </div>
+
+  <script>
+    // ===== CONFIGURATION =====
+    const HELIUS_API_KEY = '1e8ea51d-3bed-4100-ad49-a6a7635c171a';
+    const HELIUS_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+    const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
+    const PUMP_FEE_RECIPIENT = 'CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM';
+    const RENT_SYSVAR = 'SysvarRent111111111111111111111111111111111';
+    const BUY_DISCRIMINATOR = [0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea];
+    const NETLIFY_FUNCTION_URL = 'https://pump-webhook-netlify.vercel.app/api/pump-signal';
+
+    // ===== Éléments DOM =====
+    const statusEl = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const toggleScanBtn = document.getElementById('toggleScan');
+    const addressEl = document.getElementById('address');
+    const balanceEl = document.getElementById('balance');
+    const positionsEl = document.getElementById('positions');
+
+    // ===== État global =====
+    let provider = null;
+    let connection = null;
+    let isScanning = false;
+    let scanInterval = null;
+    let lastProcessedMint = null;
+    const activePositions = new Map(); // mint => { buyPrice, amount, target }
+
+    // ===== UTILITAIRES =====
+    function log(msg) {
+      console.log('[CryptoFlux]', msg);
+      statusEl.textContent = msg;
+    }
+
+    function getProvider() {
+      if (typeof window === 'undefined') return null;
+      if (window.phantom?.solana?.isPhantom) return window.phantom.solana;
+      if (window.solana) return window.solana;
+      return null;
+    }
+
+    function encodeU64(value) {
+      const buffer = new ArrayBuffer(8);
+      const view = new DataView(buffer);
+      view.setBigUint64(0, BigInt(value), true);
+      return new Uint8Array(buffer);
+    }
+
+    // ===== CONNEXION WALLET =====
+    async function connectWallet() {
+      const walletProvider = getProvider();
+      if (!walletProvider) {
+        log("❌ Ouvrez cette page dans l'app Phantom → Browser");
+        return;
+      }
+
+      try {
+        log("Connexion en cours...");
+        const resp = await walletProvider.connect();
+        const pubKey = resp.publicKey.toString();
+
+        connection = new solanaWeb3.Connection(HELIUS_RPC_URL, 'confirmed');
+        const balanceLamports = await connection.getBalance(resp.publicKey);
+        const balanceSol = balanceLamports / solanaWeb3.LAMPORTS_PER_SOL;
+
+        addressEl.textContent = `${pubKey.slice(0,6)}...${pubKey.slice(-4)}`;
+        balanceEl.textContent = balanceSol.toFixed(4);
+        provider = walletProvider;
+        document.getElementById('app').style.display = 'block';
+        log("✅ Connecté !");
+      } catch (err) {
+        console.error(err);
+        log(`❌ ${err.message || 'Annulé'}`);
+      }
+    }
+
+    // ===== ENRICHISSEMENT TOKEN =====
+    async function enrichTokenInfo(mintAddress) {
+      try {
+        const heliusUrl = HELIUS_RPC_URL;
+        const metadataRes = await fetch(heliusUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 'token-info',
+            method: 'getTokenMetadata',
+            params: { mint: mintAddress }
+          })
+        });
+        const metadataData = await metadataRes.json();
+        const metadata = metadataData.result;
+
+        if (!metadata || !metadata.pumpFun) return null;
+
+        const totalSupply = metadata.tokenInfo?.supply ? 
+          parseInt(metadata.tokenInfo.supply) / Math.pow(10, metadata.tokenInfo.decimals || 9) : 0;
+        const virtualSolReserves = metadata.pumpFun.virtualSolReserves || 0;
+        const pricePerToken = totalSupply > 0 ? virtualSolReserves / totalSupply : 0;
+        const marketcapUsd = pricePerToken * virtualSolReserves * 150;
+
+        const holdersRes = await fetch(heliusUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 'holders',
+            method: 'getTokenHolders',
+            params: { mint: mintAddress, limit: 1000 }
+          })
+        });
+        const holdersData = await holdersRes.json();
+        const holderCount = holdersData.result?.length || 0;
+
+        const accountInfo = await connection.getAccountInfo(new solanaWeb3.PublicKey(mintAddress));
+        const blockTime = accountInfo?.slot ? await connection.getBlockTime(accountInfo.slot) : null;
+        const ageSeconds = blockTime ? Math.floor(Date.now() / 1000 - blockTime) : Infinity;
+
+        return {
+          mint: mintAddress,
+          name: metadata.tokenInfo?.name || 'Unknown',
+          symbol: metadata.tokenInfo?.symbol || '???',
+          marketcapUsd: marketcapUsd,
+          holderCount: holderCount,
+          ageSeconds: ageSeconds,
+          priceSol: pricePerToken,
+          virtualSolReserves: virtualSolReserves
+        };
+      } catch (err) {
+        console.error("Enrichissement échoué:", err);
+        return null;
+      }
+    }
+
+    // ===== FILTRES =====
+    function passesFilters(tokenInfo) {
+      const maxAge = parseInt(document.getElementById('maxAge').value) || 300;
+      const minMarketcap = parseFloat(document.getElementById('minMarketcap').value) || 10000;
+      const minHolders = parseInt(document.getElementById('minHolders').value) || 50;
+
+      return (
+        tokenInfo.ageSeconds <= maxAge &&
+        tokenInfo.marketcapUsd >= minMarketcap &&
+        tokenInfo.holderCount >= minHolders
+      );
+    }
+
+    // ===== ACHAT =====
+    async function buyToken(tokenInfo) {
+      if (!provider || !connection || !provider.publicKey) {
+        log("❌ Wallet non connecté");
+        return;
+      }
+
+      const buyAmountSol = parseFloat(document.getElementById('buyAmount').value) || 0.05;
+      const priorityFeeLamports = parseInt(document.getElementById('priorityFee').value) || 100000;
+      const buyAmountLamports = buyAmountSol * solanaWeb3.LAMPORTS_PER_SOL;
+
+      try {
+        log(`Préparation achat pour ${tokenInfo.mint}...`);
+
+        const [pumpGlobal] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [Buffer.from("global")],
+          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
+        );
+        const [pumpTokenAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [Buffer.from("token_account"), new solanaWeb3.PublicKey(tokenInfo.mint).toBuffer()],
+          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
+        );
+        const [userTokenAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [
+            provider.publicKey.toBuffer(),
+            new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(),
+            new solanaWeb3.PublicKey(tokenInfo.mint).toBuffer()
+          ],
+          new solanaWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+        );
+
+        const transaction = new solanaWeb3.Transaction();
+        transaction.feePayer = provider.publicKey;
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+
+        transaction.add(
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeLamports })
+        );
+
+        const userTokenAccountInfo = await connection.getAccountInfo(userTokenAccount);
+        if (!userTokenAccountInfo) {
+          transaction.add(
+            solanaWeb3.SystemProgram.createAccount({
+              fromPubkey: provider.publicKey,
+              newAccountPubkey: userTokenAccount,
+              lamports: await connection.getMinimumBalanceForRentExemption(165),
+              space: 165,
+              programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+            }),
+            new solanaWeb3.TransactionInstruction({
+              keys: [
+                { pubkey: userTokenAccount, isSigner: false, isWritable: true },
+                { pubkey: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), isSigner: false, isWritable: false },
+                { pubkey: provider.publicKey, isSigner: true, isWritable: false }
+              ],
+              programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+               Buffer.from([9])
+            })
+          );
+        }
+
+        const buyInstruction = new solanaWeb3.TransactionInstruction({
+          keys: [
+            { pubkey: provider.publicKey, isSigner: true, isWritable: true },
+            { pubkey: pumpGlobal, isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey(PUMP_FEE_RECIPIENT), isSigner: false, isWritable: true },
+            { pubkey: pumpTokenAccount, isSigner: false, isWritable: true },
+            { pubkey: userTokenAccount, isSigner: false, isWritable: true },
+            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey(RENT_SYSVAR), isSigner: false, isWritable: false }
+          ],
+          programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
+           Buffer.concat([
+            Buffer.from(BUY_DISCRIMINATOR),
+            Buffer.from(encodeU64(buyAmountLamports))
+          ])
+        });
+
+        transaction.add(buyInstruction);
+        log("Demande de signature dans Phantom...");
+        const signed = await provider.signTransaction(transaction);
+        const txid = await connection.sendRawTransaction(signed.serialize());
+        log(`✅ Achat envoyé ! https://solscan.io/tx/${txid}`);
+
+        // Enregistrer la position
+        const profitTarget = parseFloat(document.getElementById('profitTarget').value) || 50;
+        activePositions.set(tokenInfo.mint, {
+          buyPrice: tokenInfo.priceSol,
+          amountSol: buyAmountSol,
+          targetPrice: tokenInfo.priceSol * (1 + profitTarget / 100),
+          txid: txid
+        });
+
+        updatePositionsUI();
+        monitorPositionForSale(tokenInfo.mint);
+
+      } catch (err) {
+        console.error(err);
+        log(`❌ Échec achat: ${err.message || err}`);
+      }
+    }
+
+    // ===== SURVEILLANCE POUR REVENTE =====
+    async function monitorPositionForSale(mint) {
+      if (!activePositions.has(mint)) return;
+
+      const checkPrice = async () => {
+        const enriched = await enrichTokenInfo(mint);
+        if (!enriched) return;
+
+        const position = activePositions.get(mint);
+        if (enriched.priceSol >= position.targetPrice) {
+          log(`🎯 Profit atteint pour ${mint} ! Préparation vente...`);
+          // Ici, vous pouvez appeler une fonction de vente (à implémenter)
+          alert(`🎯 Profit atteint ! Vente à implémenter pour ${mint}`);
+          activePositions.delete(mint);
+          updatePositionsUI();
+        } else {
+          // Relancer dans 5 sec
+          setTimeout(checkPrice, 5000);
+        }
+      };
+
+      setTimeout(checkPrice, 5000);
+    }
+
+    // ===== UI POSITIONS =====
+    function updatePositionsUI() {
+      if (activePositions.size === 0) {
+        positionsEl.innerHTML = "Aucune position";
+        return;
+      }
+
+      let html = '';
+      for (const [mint, pos] of activePositions.entries()) {
+        html += `
+          <div class="signal-item">
+            <strong>${mint.slice(0,8)}...</strong><br>
+            Achat: ${pos.buyPrice.toFixed(6)} SOL<br>
+            Cible: ${pos.targetPrice.toFixed(6)} SOL (+${((pos.targetPrice/pos.buyPrice - 1)*100).toFixed(1)}%)<br>
+            Tx: <a href="https://solscan.io/tx/${pos.txid}" target="_blank" style="color:#00ff88;">voir</a>
+          </div>
+        `;
+      }
+      positionsEl.innerHTML = html;
+    }
+
+    // ===== SCANNER EN TEMPS RÉEL =====
+    async function pollForSignals() {
+      try {
+        const response = await fetch(NETLIFY_FUNCTION_URL);
+        const signal = await response.json();
+        
+        if (signal.mint && signal.mint !== lastProcessedMint) {
+          lastProcessedMint = signal.mint;
+          const enriched = await enrichTokenInfo(signal.mint);
+          if (enriched && passesFilters(enriched)) {
+            log(`🔔 Signal filtré: ${enriched.symbol || enriched.mint}`);
+            buyToken(enriched);
+          }
+        }
+      } catch (err) {
+        console.error("Polling échoué:", err);
+      }
+    }
+
+    // ===== TOGGLE SCAN =====
+    function toggleScan() {
+      if (isScanning) {
+        clearInterval(scanInterval);
+        isScanning = false;
+        toggleScanBtn.textContent = "▶️ Démarrer le Scan";
+        log("⏹️ Scan arrêté");
+      } else {
+        isScanning = true;
+        toggleScanBtn.textContent = "⏹️ Arrêter le Scan";
+        scanInterval = setInterval(pollForSignals, 3000);
+        log("🔍 Scan en temps réel activé");
+      }
+    }
+
+    // ===== INITIALISATION =====
+    function detectWallet() {
+      const provider = getProvider();
+      if (provider) {
+        log("✅ Wallet détecté !");
+        connectBtn.disabled = false;
+        connectBtn.onclick = connectWallet;
+      } else {
+        log("❌ Ouvrez cette page dans l'app Phantom → Browser");
+      }
+    }
+
+    // Démarrer
+    setTimeout(detectWallet, 800);
+    toggleScanBtn.onclick = toggleScan;
+  </script>
+</body>
+</html>
