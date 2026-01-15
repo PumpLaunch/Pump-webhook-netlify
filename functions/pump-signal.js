@@ -16,7 +16,6 @@ export default async (request, context) => {
       const event = await request.json();
       let tokenMint = null;
 
-      // Extraction robuste du mint
       if (event?.events?.[0]?.tokenMint) tokenMint = event.events[0].tokenMint;
       else if (event?.parsed?.tokenMint) tokenMint = event.parsed.tokenMint;
       else if (event?.accounts?.[2]) tokenMint = event.accounts[2];
