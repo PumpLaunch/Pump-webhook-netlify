@@ -1,39 +1,51 @@
 let latestSignal = null;
 
-export default async (request, context) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type'
-  };
+module.exports = async (req, res) => {
+  // CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { headers });
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
   }
 
   try {
-    if (request.method === 'POST') {
-      const event = await request.json();
-      let tokenMint = null;
+    if (req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const event = JSON.parse(body);
+          let tokenMint = null;
 
-      // Extraction robuste du mint
-      if (event?.events?.[0]?.tokenMint) tokenMint = event.events[0].tokenMint;
-      else if (event?.parsed?.tokenMint) tokenMint = event.parsed.tokenMint;
-      else if (event?.accounts?.[2]) tokenMint = event.accounts[2];
+          if (event?.events?.[0]?.tokenMint) tokenMint = event.events[0].tokenMint;
+          else if (event?.parsed?.tokenMint) tokenMint = event.parsed.tokenMint;
+          else if (event?.accounts?.[2]) tokenMint = event.accounts[2];
 
-      if (tokenMint) {
-        latestSignal = { mint: tokenMint, timestamp: Date.now() };
-        console.log("✅ Token détecté:", tokenMint);
-        return new Response(JSON.stringify({ ok: true }), { headers });
-      }
-      return new Response(JSON.stringify({ error: "no_mint" }), { status: 400, headers });
-
-    } else if (request.method === 'GET') {
-      return new Response(JSON.stringify(latestSignal || { message: "no_signal" }), { headers });
+          if (tokenMint) {
+            latestSignal = { mint: tokenMint, timestamp: Date.now() };
+            console.log("✅ Token détecté:", tokenMint);
+            res.status(200).json({ ok: true });
+          } else {
+            res.status(400).json({ error: "no_mint" });
+          }
+        } catch (parseErr) {
+          res.status(400).json({ error: "invalid_json" });
+        }
+      });
+      return;
     }
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers });
-  }
 
-  return new Response(JSON.stringify({ error: "method_not_allowed" }), { status: 405, headers });
+    if (req.method === 'GET') {
+      res.status(200).json(latestSignal || { message: "no_signal" });
+      return;
+    }
+
+    res.status(405).json({ error: "method_not_allowed" });
+  } catch (err) {
+    console.error("Erreur:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
 };
