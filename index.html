@@ -73,7 +73,7 @@
     <div id="app" style="display:none;">
       <div class="card">
         <div><strong>Adresse :</strong> <span id="address">...</span></div>
-        <div><strong>Solde :</strong> <span id="balance">0.00</span> SOL</div>
+        <div><strong>Solde :</strong> <span id="balance">Chargement...</span> SOL</div>
         <div><strong>Réseau :</strong> Mainnet</div>
       </div>
       <div class="card">
@@ -87,9 +87,8 @@
 
   <script>
     // === CONFIGURATION ===
-    const HELIUS_API_KEY = '8f852e97-a557-4065-be74-cc2a6547cd28';
-    const HELIUS_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
     const WEBHOOK_URL = 'https://pump-webhook-netlify.vercel.app/api/pump-signal';
+    const RPC_URL = 'https://api.mainnet-beta.solana.com'; // Public, pas de limite
 
     // === Éléments DOM ===
     const statusEl = document.getElementById('status');
@@ -98,6 +97,8 @@
     const appEl = document.getElementById('app');
     const addressEl = document.getElementById('address');
     const balanceEl = document.getElementById('balance');
+
+    let provider = null;
 
     // === UTILITAIRES ===
     function log(msg) {
@@ -112,26 +113,43 @@
       return null;
     }
 
+    async function getBalance(publicKey) {
+      try {
+        const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
+        const balanceLamports = await connection.getBalance(publicKey);
+        return balanceLamports / solanaWeb3.LAMPORTS_PER_SOL;
+      } catch (err) {
+        console.warn("⚠️ Impossible de charger le solde:", err.message);
+        return null;
+      }
+    }
+
     // === CONNEXION WALLET ===
     async function connectWallet() {
-      const provider = getProvider();
-      if (!provider) {
+      const walletProvider = getProvider();
+      if (!walletProvider) {
         log("❌ Ouvrez cette page dans l'app Phantom → Browser");
         return;
       }
 
       try {
         log("Connexion en cours...");
-        const { publicKey } = await provider.connect();
+        const { publicKey } = await walletProvider.connect();
         const pubKeyStr = publicKey.toString();
 
-        const connection = new solanaWeb3.Connection(HELIUS_RPC_URL, 'confirmed');
-        const balanceLamports = await connection.getBalance(publicKey);
-        const balanceSol = balanceLamports / solanaWeb3.LAMPORTS_PER_SOL;
-
+        // Afficher l'adresse immédiatement
         addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
-        balanceEl.textContent = balanceSol.toFixed(4);
         appEl.style.display = 'block';
+        provider = walletProvider;
+
+        // Charger le solde en arrière-plan
+        const balance = await getBalance(publicKey);
+        if (balance !== null) {
+          balanceEl.textContent = balance.toFixed(4);
+        } else {
+          balanceEl.textContent = "—";
+        }
+
         startScanBtn.disabled = false;
         log("✅ Connecté !");
       } catch (err) {
