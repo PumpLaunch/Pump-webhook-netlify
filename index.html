@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CryptoFlux Pro - Pump Sniper</title>
+  <title>Pump Sniper Pro</title>
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
   <style>
     :root {
       --bg: #0a0e27;
@@ -48,18 +49,12 @@
       cursor: pointer;
       transition: all 0.3s;
     }
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-primary {
       background: linear-gradient(135deg, var(--purple), var(--green));
       color: white;
     }
-    .btn-danger {
-      background: var(--red);
-      color: white;
-    }
+    .btn-danger { background: var(--red); color: white; }
     .btn-secondary {
       background: var(--card);
       color: white;
@@ -82,11 +77,6 @@
       background: rgba(255, 51, 102, 0.1);
       border: 1px solid var(--red);
       color: var(--red);
-    }
-    .alert-warning {
-      background: rgba(255, 149, 0, 0.1);
-      border: 1px solid var(--orange);
-      color: var(--orange);
     }
     .alert-success {
       background: rgba(0, 255, 136, 0.1);
@@ -118,10 +108,6 @@
       margin-bottom: 8px;
       font-family: monospace;
     }
-    input:focus, select:focus {
-      outline: none;
-      border-color: var(--purple);
-    }
     .stats {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -134,17 +120,14 @@
       border-radius: 6px;
       text-align: center;
     }
-    .stat-label {
-      font-size: 0.75rem;
-      color: #8892b0;
-    }
+    .stat-label { font-size: 0.75rem; color: #8892b0; }
     .stat-value {
       font-size: 1.2rem;
       font-weight: 700;
       font-family: monospace;
     }
     .log {
-      max-height: 200px;
+      max-height: 300px;
       overflow-y: auto;
       font-family: monospace;
       font-size: 0.85rem;
@@ -156,41 +139,27 @@
       padding: 4px 0;
       border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    .log-time {
-      color: #8892b0;
-      margin-right: 8px;
-    }
-    .rate-limit-info {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px;
-      background: rgba(0,0,0,0.3);
-      border-radius: 6px;
-      margin-top: 8px;
-      font-size: 0.85rem;
-      font-family: monospace;
-    }
+    .log-time { color: #8892b0; margin-right: 8px; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <div class="logo">⚡ PUMP SNIPER</div>
-      <button id="connectBtn" class="btn btn-primary" disabled>Connecter Wallet</button>
+      <div class="logo">⚡ PUMP SNIPER PRO</div>
+      <button id="connectBtn" class="btn btn-primary" disabled>Connecter</button>
     </div>
 
     <div id="app" style="display:none;">
       <div class="card">
-        <div class="alert alert-warning">
-          <strong>⚠️ RATE LIMITING ACTIVÉ</strong><br>
-          Scan toutes les 10 secondes pour éviter les limites API
+        <div class="alert alert-success">
+          <strong>✅ READY TO TRADE</strong><br>
+          RPC Solana Public | Buffer Polyfill OK
         </div>
         
         <div class="stats">
           <div class="stat">
             <div class="stat-label">SOLDE</div>
-            <div class="stat-value" id="balance">— SOL</div>
+            <div class="stat-value" id="balance">—</div>
           </div>
           <div class="stat">
             <div class="stat-label">SCANNÉS</div>
@@ -202,83 +171,89 @@
           </div>
         </div>
         
-        <div class="rate-limit-info">
-          <span>Prochain scan: <strong id="nextScan">--</strong></span>
-          <span>Intervalle: <strong id="scanInterval">10s</strong></span>
-        </div>
-        
-        <div style="font-family: monospace; font-size: 0.85rem; color: #8892b0; margin-top: 8px;">
+        <div style="font-family: monospace; font-size: 0.85rem; color: #8892b0;">
           <div><strong>Wallet:</strong> <span id="address">...</span></div>
-          <div><strong>RPC:</strong> Helius Premium (rate limited)</div>
+          <div><strong>RPC:</strong> <span id="rpcStatus">Public Solana</span></div>
         </div>
       </div>
 
       <div class="card">
         <div class="alert alert-danger">
           <strong>⚠️ TRADING RÉEL</strong><br>
-          Transactions irréversibles sur Solana Mainnet
+          Commencez avec 0.01 SOL pour tester
         </div>
 
         <h3 style="margin-bottom: 12px;">⚙️ Configuration</h3>
         
-        <label>💰 Montant par achat (SOL):</label>
-        <input type="number" id="buyAmount" value="0.05" step="0.01" min="0.01" max="1">
+        <label>💰 Montant (SOL):</label>
+        <input type="number" id="buyAmount" value="0.01" step="0.005" min="0.005" max="1">
         
-        <label>👥 Détenteurs minimum:</label>
-        <input type="number" id="minHolders" value="20" min="5" max="200">
+        <label>👥 Holders min:</label>
+        <input type="number" id="minHolders" value="15" min="5" max="100">
         
-        <label>📊 Concentration max du top holder (%):</label>
-        <input type="number" id="maxTopHolder" value="40" min="10" max="100">
+        <label>📊 Top holder max (%):</label>
+        <input type="number" id="maxTopHolder" value="50" min="10" max="100">
         
-        <label>⏱️ Intervalle de scan (secondes):</label>
-        <select id="scanIntervalSelect">
-          <option value="5000">5 secondes (risque de rate limit)</option>
-          <option value="10000" selected>10 secondes (recommandé)</option>
-          <option value="15000">15 secondes (sûr)</option>
-          <option value="30000">30 secondes (très sûr)</option>
+        <label>⏱️ Intervalle (secondes):</label>
+        <select id="scanInterval">
+          <option value="15000" selected>15s</option>
+          <option value="20000">20s</option>
+          <option value="30000">30s</option>
         </select>
         
-        <label>⚡ Frais de priorité:</label>
+        <label>⚡ Frais priorité:</label>
         <select id="priorityFee">
-          <option value="50000">Moyen (0.00005 SOL)</option>
-          <option value="100000" selected>Élevé (0.0001 SOL)</option>
-          <option value="500000">Turbo (0.0005 SOL)</option>
-          <option value="1000000">Extrême (0.001 SOL)</option>
+          <option value="100000" selected>Élevé</option>
+          <option value="500000">Turbo</option>
+          <option value="1000000">Max</option>
         </select>
         
         <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-          <button id="toggleScan" class="btn btn-primary">▶️ Démarrer</button>
-          <button id="stopAll" class="btn btn-danger" style="display:none;">🛑 Stop All</button>
+          <button id="toggleScan" class="btn btn-primary">▶️ Start</button>
+          <button id="stopAll" class="btn btn-danger" style="display:none;">🛑 Stop</button>
         </div>
       </div>
 
       <div class="card">
-        <h3 style="margin-bottom: 8px;">📜 Journal d'activité</h3>
+        <h3 style="margin-bottom: 8px;">📜 Journal</h3>
         <div id="log" class="log"></div>
       </div>
     </div>
 
-    <div id="status" class="status">Vérification du wallet Phantom...</div>
+    <div id="status" class="status">Initialisation...</div>
   </div>
 
   <script>
     // ========================================
+    // POLYFILL BUFFER
+    // ========================================
+    
+    window.Buffer = buffer.Buffer;
+    
+    // ========================================
     // CONFIGURATION
     // ========================================
     
-    const HELIUS_RPC_URL = 'https://mainnet.helius-rpc.com/?api-key=43caa0a0-33d2-420c-b00a-e7261bfecf78';
+    const RPC_ENDPOINTS = [
+      'https://api.mainnet-beta.solana.com',
+      'https://solana-api.projectserum.com',
+      'https://rpc.ankr.com/solana'
+    ];
+    
+    let currentRpcIndex = 0;
+    
     const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
     const PUMP_GLOBAL = '4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf';
-    const PUMP_FEE_RECIPIENT = 'CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM';
+    const PUMP_FEE = 'CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM';
     const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
-    const ASSOCIATED_TOKEN_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
+    const ATA_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
     const SYSTEM_PROGRAM = '11111111111111111111111111111111';
-    const RENT_SYSVAR = 'SysvarRent111111111111111111111111111111111';
+    const RENT = 'SysvarRent111111111111111111111111111111111';
     
     const BUY_DISCRIMINATOR = [0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea];
     
     // ========================================
-    // VARIABLES GLOBALES
+    // VARIABLES
     // ========================================
     
     let provider = null;
@@ -287,10 +262,7 @@
     let scanInterval = null;
     let seenTokens = new Set();
     let stats = { scanned: 0, bought: 0 };
-    let rateLimitCount = 0;
-    let nextScanTime = 0;
     
-    // Éléments DOM
     const statusEl = document.getElementById('status');
     const connectBtn = document.getElementById('connectBtn');
     const toggleScanBtn = document.getElementById('toggleScan');
@@ -301,8 +273,7 @@
     const boughtEl = document.getElementById('bought');
     const logEl = document.getElementById('log');
     const appEl = document.getElementById('app');
-    const nextScanEl = document.getElementById('nextScan');
-    const scanIntervalEl = document.getElementById('scanInterval');
+    const rpcStatusEl = document.getElementById('rpcStatus');
 
     // ========================================
     // UTILITAIRES
@@ -311,14 +282,16 @@
     function addLog(msg, type = 'info') {
       const now = new Date();
       const time = now.toLocaleTimeString('fr-FR');
-      const color = type === 'error' ? 'var(--red)' : type === 'success' ? 'var(--green)' : type === 'warning' ? 'var(--orange)' : '#8892b0';
+      const color = type === 'error' ? 'var(--red)' : 
+                    type === 'success' ? 'var(--green)' : 
+                    type === 'warning' ? 'var(--orange)' : '#8892b0';
       
       const item = document.createElement('div');
       item.className = 'log-item';
       item.innerHTML = `<span class="log-time">[${time}]</span><span style="color:${color}">${msg}</span>`;
       logEl.insertBefore(item, logEl.firstChild);
       
-      while (logEl.children.length > 50) {
+      while (logEl.children.length > 100) {
         logEl.removeChild(logEl.lastChild);
       }
       
@@ -331,45 +304,46 @@
       boughtEl.textContent = stats.bought;
     }
 
-    function updateNextScanTime() {
-      if (!isScanning) {
-        nextScanEl.textContent = '--';
-        return;
-      }
-      
-      const remaining = Math.max(0, Math.ceil((nextScanTime - Date.now()) / 1000));
-      nextScanEl.textContent = `${remaining}s`;
-    }
-
     async function updateBalance() {
       if (!provider || !connection) return;
       try {
-        const balance = await connection.getBalance(provider.publicKey);
-        const sol = (balance / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4);
-        balanceEl.textContent = `${sol} SOL`;
+        const bal = await connection.getBalance(provider.publicKey);
+        balanceEl.textContent = (bal / 1e9).toFixed(4);
       } catch (err) {
-        console.error('Erreur mise à jour solde:', err);
+        console.error('Balance error:', err);
       }
     }
 
     // ========================================
-    // GESTION DU RATE LIMITING
+    // RPC
     // ========================================
     
-    async function safeRpcCall(fn, retries = 3, delay = 2000) {
+    function createConnection() {
+      const url = RPC_ENDPOINTS[currentRpcIndex];
+      addLog(`🔌 RPC: ${url.split('/')[2]}`);
+      rpcStatusEl.textContent = url.split('/')[2];
+      return new solanaWeb3.Connection(url, {
+        commitment: 'confirmed',
+        confirmTransactionInitialTimeout: 60000
+      });
+    }
+
+    function switchRPC() {
+      currentRpcIndex = (currentRpcIndex + 1) % RPC_ENDPOINTS.length;
+      connection = createConnection();
+    }
+
+    async function robustCall(fn, retries = 2) {
       for (let i = 0; i < retries; i++) {
         try {
           return await fn();
         } catch (err) {
-          if (err.message && err.message.includes('429')) {
-            rateLimitCount++;
-            addLog(`⚠️ Rate limit atteint (${rateLimitCount}x) - attente ${delay/1000}s...`, 'warning');
-            
-            if (i < retries - 1) {
-              await new Promise(resolve => setTimeout(resolve, delay));
-              delay *= 2; // Exponential backoff
+          if (i < retries - 1) {
+            if (err.message.includes('429') || err.message.includes('fetch')) {
+              switchRPC();
+              await new Promise(r => setTimeout(r, 2000));
             } else {
-              throw err;
+              await new Promise(r => setTimeout(r, 1000));
             }
           } else {
             throw err;
@@ -379,7 +353,7 @@
     }
 
     // ========================================
-    // CONNEXION WALLET
+    // CONNEXION
     // ========================================
     
     if (window.phantom?.solana?.isPhantom) {
@@ -392,200 +366,171 @@
           provider = window.phantom.solana;
           
           const { publicKey } = await provider.connect();
-          connection = new solanaWeb3.Connection(HELIUS_RPC_URL, 'confirmed');
+          connection = createConnection();
           
-          const pubKeyStr = publicKey.toString();
-          addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
+          const addr = publicKey.toString();
+          addressEl.textContent = `${addr.slice(0,6)}...${addr.slice(-4)}`;
           
           await updateBalance();
           
           appEl.style.display = 'block';
           connectBtn.style.display = 'none';
           
-          addLog("✅ Connecté avec succès!", 'success');
+          addLog("✅ Connecté!", 'success');
           
-          setInterval(updateBalance, 30000); // Toutes les 30 secondes
-          setInterval(updateNextScanTime, 1000); // Chaque seconde
+          setInterval(updateBalance, 30000);
           
         } catch (err) {
-          addLog(`❌ Erreur: ${err.message}`, 'error');
+          addLog(`❌ ${err.message}`, 'error');
         }
       };
     } else {
-      addLog("❌ Phantom non installé", 'error');
-      statusEl.innerHTML = '❌ Phantom requis<br><a href="https://phantom.app/" target="_blank" style="color:var(--purple)">Installer Phantom</a>';
+      addLog("❌ Phantom requis", 'error');
+      statusEl.innerHTML = '<a href="https://phantom.app/" target="_blank" style="color:var(--purple)">Installer Phantom</a>';
     }
 
     // ========================================
-    // ANALYSE DE TOKEN
+    // ANALYSE
     // ========================================
     
-    async function analyzeToken(mintAddress) {
+    async function analyzeToken(mint) {
       try {
-        const mint = new solanaWeb3.PublicKey(mintAddress);
+        const pk = new solanaWeb3.PublicKey(mint);
         
-        const largestAccounts = await safeRpcCall(async () => {
-          return await connection.getTokenLargestAccounts(mint);
+        const accs = await robustCall(async () => {
+          return await connection.getTokenLargestAccounts(pk);
         });
         
-        const holderCount = largestAccounts.value.length;
-        const minHolders = parseInt(document.getElementById('minHolders').value) || 20;
+        const holders = accs.value.length;
+        const minH = parseInt(document.getElementById('minHolders').value) || 15;
         
-        if (holderCount < minHolders) {
-          addLog(`⚠️ ${mintAddress.slice(0, 8)}... - ${holderCount} holders < ${minHolders}`, 'warning');
+        if (holders < minH) {
+          addLog(`⚠️ ${mint.slice(0,8)}... ${holders} holders < ${minH}`, 'warning');
           return null;
         }
         
-        const topHolderPercent = largestAccounts.value[0] ? 
-          (Number(largestAccounts.value[0].amount) / 1e15) * 100 : 0;
+        const top = accs.value[0];
+        const topPct = top ? (Number(top.amount) / 1e15) * 100 : 0;
+        const maxTop = parseInt(document.getElementById('maxTopHolder').value) || 50;
         
-        const maxTopHolder = parseInt(document.getElementById('maxTopHolder').value) || 40;
-        
-        if (topHolderPercent > maxTopHolder) {
-          addLog(`⚠️ ${mintAddress.slice(0, 8)}... - Top holder ${topHolderPercent.toFixed(0)}% > ${maxTopHolder}%`, 'warning');
+        if (topPct > maxTop) {
+          addLog(`⚠️ ${mint.slice(0,8)}... Top ${topPct.toFixed(0)}% > ${maxTop}%`, 'warning');
           return null;
         }
         
-        return {
-          mint: mintAddress,
-          holderCount,
-          topHolderPercent,
-          score: holderCount >= 50 ? 90 : holderCount >= 30 ? 80 : 70
-        };
+        return { mint, holders, topPct };
         
       } catch (err) {
-        console.error('Erreur analyse:', err);
+        console.error('Analyze error:', err);
         return null;
       }
     }
 
     // ========================================
-    // ACHAT DE TOKEN
+    // ACHAT
     // ========================================
     
-    async function buyToken(tokenData) {
-      if (!provider || !connection) {
-        addLog("❌ Wallet non connecté", 'error');
-        return false;
-      }
+    async function buyToken(data) {
+      if (!provider || !connection) return false;
 
-      const mintAddress = tokenData.mint;
-      const buyAmountSol = parseFloat(document.getElementById('buyAmount').value) || 0.05;
-      const priorityFeeMicroLamports = parseInt(document.getElementById('priorityFee').value) || 100000;
+      const mint = data.mint;
+      const sol = parseFloat(document.getElementById('buyAmount').value) || 0.01;
+      const fee = parseInt(document.getElementById('priorityFee').value) || 100000;
 
       try {
-        addLog(`🔄 Achat ${mintAddress.slice(0, 8)}... (${buyAmountSol} SOL)`, 'info');
+        addLog(`🔄 Achat ${mint.slice(0,8)}... (${sol} SOL)`);
         
-        const mint = new solanaWeb3.PublicKey(mintAddress);
-        const buyAmountLamports = Math.floor(buyAmountSol * solanaWeb3.LAMPORTS_PER_SOL);
+        const mintPk = new solanaWeb3.PublicKey(mint);
+        const lamports = Math.floor(sol * 1e9);
         
-        const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [Buffer.from('bonding-curve'), mint.toBuffer()],
+        // PDAs
+        const [curve] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [Buffer.from('bonding-curve'), mintPk.toBuffer()],
           new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
         );
         
-        const [associatedBondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
+        const [curveAta] = solanaWeb3.PublicKey.findProgramAddressSync(
           [
-            bondingCurve.toBuffer(),
+            curve.toBuffer(),
             new solanaWeb3.PublicKey(TOKEN_PROGRAM).toBuffer(),
-            mint.toBuffer(),
+            mintPk.toBuffer()
           ],
-          new solanaWeb3.PublicKey(ASSOCIATED_TOKEN_PROGRAM)
+          new solanaWeb3.PublicKey(ATA_PROGRAM)
         );
         
-        const [associatedUser] = solanaWeb3.PublicKey.findProgramAddressSync(
+        const [userAta] = solanaWeb3.PublicKey.findProgramAddressSync(
           [
             provider.publicKey.toBuffer(),
             new solanaWeb3.PublicKey(TOKEN_PROGRAM).toBuffer(),
-            mint.toBuffer(),
+            mintPk.toBuffer()
           ],
-          new solanaWeb3.PublicKey(ASSOCIATED_TOKEN_PROGRAM)
+          new solanaWeb3.PublicKey(ATA_PROGRAM)
         );
         
-        const transaction = new solanaWeb3.Transaction();
+        // TX
+        const tx = new solanaWeb3.Transaction();
         
-        transaction.add(
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({
-            microLamports: priorityFeeMicroLamports
-          })
+        tx.add(
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: fee }),
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 100000 })
         );
         
-        transaction.add(
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({
-            units: 100000
-          })
-        );
+        // Data
+        const amtBuf = Buffer.alloc(8);
+        amtBuf.writeBigUInt64LE(BigInt(lamports), 0);
         
-        const ataInfo = await safeRpcCall(async () => {
-          return await connection.getAccountInfo(associatedUser);
-        });
+        const maxBuf = Buffer.alloc(8);
+        maxBuf.writeBigUInt64LE(BigInt(lamports), 0);
         
-        if (!ataInfo) {
-          addLog(`🔨 ATA inexistant - sera créé lors de l'achat`, 'info');
-        }
-        
-        const amountBuffer = Buffer.alloc(8);
-        amountBuffer.writeBigUInt64LE(BigInt(buyAmountLamports), 0);
-        
-        const maxSolBuffer = Buffer.alloc(8);
-        maxSolBuffer.writeBigUInt64LE(BigInt(buyAmountLamports), 0);
-        
-        const instructionData = Buffer.concat([
+        const ixData = Buffer.concat([
           Buffer.from(BUY_DISCRIMINATOR),
-          amountBuffer,
-          maxSolBuffer
+          amtBuf,
+          maxBuf
         ]);
         
-        const keys = [
-          { pubkey: new solanaWeb3.PublicKey(PUMP_GLOBAL), isSigner: false, isWritable: false },
-          { pubkey: new solanaWeb3.PublicKey(PUMP_FEE_RECIPIENT), isSigner: false, isWritable: true },
-          { pubkey: mint, isSigner: false, isWritable: false },
-          { pubkey: bondingCurve, isSigner: false, isWritable: true },
-          { pubkey: associatedBondingCurve, isSigner: false, isWritable: true },
-          { pubkey: associatedUser, isSigner: false, isWritable: true },
-          { pubkey: provider.publicKey, isSigner: true, isWritable: true },
-          { pubkey: new solanaWeb3.PublicKey(SYSTEM_PROGRAM), isSigner: false, isWritable: false },
-          { pubkey: new solanaWeb3.PublicKey(TOKEN_PROGRAM), isSigner: false, isWritable: false },
-          { pubkey: new solanaWeb3.PublicKey(RENT_SYSVAR), isSigner: false, isWritable: false }
-        ];
-        
-        const buyInstruction = new solanaWeb3.TransactionInstruction({
-          keys,
+        tx.add(new solanaWeb3.TransactionInstruction({
+          keys: [
+            { pubkey: new solanaWeb3.PublicKey(PUMP_GLOBAL), isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey(PUMP_FEE), isSigner: false, isWritable: true },
+            { pubkey: mintPk, isSigner: false, isWritable: false },
+            { pubkey: curve, isSigner: false, isWritable: true },
+            { pubkey: curveAta, isSigner: false, isWritable: true },
+            { pubkey: userAta, isSigner: false, isWritable: true },
+            { pubkey: provider.publicKey, isSigner: true, isWritable: true },
+            { pubkey: new solanaWeb3.PublicKey(SYSTEM_PROGRAM), isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey(TOKEN_PROGRAM), isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey(RENT), isSigner: false, isWritable: false }
+          ],
           programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-          data: instructionData
-        });
+          data: ixData
+        }));
         
-        transaction.add(buyInstruction);
-        
-        const { blockhash } = await safeRpcCall(async () => {
+        const { blockhash } = await robustCall(async () => {
           return await connection.getLatestBlockhash();
         });
         
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = provider.publicKey;
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = provider.publicKey;
         
-        addLog("✍️ Signature...", 'info');
-        const signed = await provider.signTransaction(transaction);
+        addLog("✍️ Signature...");
+        const signed = await provider.signTransaction(tx);
         
-        addLog("📤 Envoi...", 'info');
-        const signature = await safeRpcCall(async () => {
-          return await connection.sendRawTransaction(signed.serialize(), {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed'
-          });
+        addLog("📤 Envoi...");
+        const sig = await robustCall(async () => {
+          return await connection.sendRawTransaction(signed.serialize());
         });
         
-        addLog(`🔗 https://solscan.io/tx/${signature}`, 'info');
+        addLog(`🔗 solscan.io/tx/${sig}`);
         
-        const confirmation = await safeRpcCall(async () => {
-          return await connection.confirmTransaction(signature);
+        const conf = await robustCall(async () => {
+          return await connection.confirmTransaction(sig);
         });
         
-        if (confirmation.value.err) {
-          throw new Error('Transaction échouée');
+        if (conf.value.err) {
+          throw new Error('TX failed');
         }
         
-        addLog(`✅ ACHAT CONFIRMÉ! ${mintAddress.slice(0, 8)}...`, 'success');
+        addLog(`✅ CONFIRMÉ ${mint.slice(0,8)}!`, 'success');
         stats.bought++;
         updateStats();
         await updateBalance();
@@ -593,33 +538,33 @@
         return true;
         
       } catch (err) {
-        console.error('Erreur achat:', err);
-        addLog(`❌ Échec: ${err.message}`, 'error');
+        console.error('Buy error:', err);
+        addLog(`❌ ${err.message.slice(0,40)}`, 'error');
         return false;
       }
     }
 
     // ========================================
-    // SCANNER
+    // SCAN
     // ========================================
     
-    async function scanForNewTokens() {
+    async function scan() {
       try {
-        const signatures = await safeRpcCall(async () => {
+        const sigs = await robustCall(async () => {
           return await connection.getSignaturesForAddress(
             new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-            { limit: 5 } // Réduit à 5 pour éviter rate limiting
+            { limit: 3 }
           );
         });
         
-        stats.scanned += signatures.length;
+        stats.scanned += sigs.length;
         updateStats();
         
-        for (const sig of signatures) {
+        for (const sig of sigs) {
           if (seenTokens.has(sig.signature)) continue;
           seenTokens.add(sig.signature);
           
-          const tx = await safeRpcCall(async () => {
+          const tx = await robustCall(async () => {
             return await connection.getParsedTransaction(sig.signature, {
               maxSupportedTransactionVersion: 0
             });
@@ -627,20 +572,18 @@
           
           if (!tx) continue;
           
-          const instructions = tx.transaction.message.instructions;
-          
-          for (const ix of instructions) {
+          for (const ix of tx.transaction.message.instructions) {
             if (ix.programId.toString() === PUMP_PROGRAM_ID) {
-              const accounts = ix.accounts;
-              if (accounts && accounts.length > 2) {
-                const mint = accounts[2].toString();
+              const accs = ix.accounts;
+              if (accs && accs.length > 2) {
+                const mint = accs[2].toString();
                 
-                addLog(`🆕 ${mint.slice(0, 8)}...`, 'info');
+                addLog(`🆕 ${mint.slice(0,8)}...`);
                 
                 const tokenData = await analyzeToken(mint);
                 
                 if (tokenData) {
-                  addLog(`✅ Validé! Score:${tokenData.score} Holders:${tokenData.holderCount}`, 'success');
+                  addLog(`✅ OK ${tokenData.holders} holders`, 'success');
                   await buyToken(tokenData);
                 }
               }
@@ -649,10 +592,8 @@
         }
         
       } catch (err) {
-        console.error('Erreur scan:', err);
-        if (!err.message.includes('429')) {
-          addLog(`⚠️ Erreur: ${err.message}`, 'warning');
-        }
+        console.error('Scan error:', err);
+        addLog(`⚠️ ${err.message.slice(0,30)}`, 'warning');
       }
     }
 
@@ -662,27 +603,21 @@
     
     toggleScanBtn.onclick = () => {
       if (!isScanning) {
-        const intervalMs = parseInt(document.getElementById('scanIntervalSelect').value) || 10000;
-        scanIntervalEl.textContent = `${intervalMs/1000}s`;
+        const interval = parseInt(document.getElementById('scanInterval').value);
         
         isScanning = true;
         toggleScanBtn.textContent = "⏸️ Pause";
         toggleScanBtn.className = "btn btn-secondary";
         stopAllBtn.style.display = "block";
         
-        addLog("🚀 SCANNER DÉMARRÉ", 'success');
+        addLog("🚀 START", 'success');
         
-        scanInterval = setInterval(() => {
-          nextScanTime = Date.now() + intervalMs;
-          scanForNewTokens();
-        }, intervalMs);
-        
-        nextScanTime = Date.now() + intervalMs;
-        scanForNewTokens();
+        scanInterval = setInterval(scan, interval);
+        scan();
         
       } else {
         isScanning = false;
-        toggleScanBtn.textContent = "▶️ Démarrer";
+        toggleScanBtn.textContent = "▶️ Start";
         toggleScanBtn.className = "btn btn-primary";
         
         if (scanInterval) {
@@ -696,7 +631,7 @@
 
     stopAllBtn.onclick = () => {
       isScanning = false;
-      toggleScanBtn.textContent = "▶️ Démarrer";
+      toggleScanBtn.textContent = "▶️ Start";
       toggleScanBtn.className = "btn btn-primary";
       stopAllBtn.style.display = "none";
       
@@ -707,15 +642,14 @@
       
       seenTokens.clear();
       stats = { scanned: 0, bought: 0 };
-      rateLimitCount = 0;
       updateStats();
       
-      addLog("🛑 ARRÊT COMPLET", 'error');
+      addLog("🛑 STOP", 'error');
     };
-
-    window.addEventListener('beforeunload', () => {
-      if (scanInterval) clearInterval(scanInterval);
-    });
+    
+    // Init
+    addLog("✅ Buffer polyfill OK");
+    addLog("✅ Ready to connect");
   </script>
 </body>
 </html>
