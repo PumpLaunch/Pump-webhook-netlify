@@ -151,8 +151,8 @@
     <div id="app" style="display:none;">
       <div class="card">
         <div class="alert alert-success">
-          <strong>✅ VALIDATION AUTOMATIQUE</strong><br>
-          Achat si: ≥20 holders, dev ≤50%, liquidité >0
+          <strong>✅ RPC MULTIPLE</strong><br>
+          Helius + fallback public
         </div>
         
         <div class="stats">
@@ -394,44 +394,37 @@
     }
 
     // ========================================
-    // VALIDATION AUTOMATIQUE DU TOKEN
+    // ANALYSE
     // ========================================
     
-    async function validateToken(mint) {
+    async function analyzeToken(mint) {
       try {
         const mintPubkey = new solanaWeb3.PublicKey(mint);
         const accounts = await robustCall(() => connection.getTokenLargestAccounts(mintPubkey));
         const holders = accounts.value.length;
-        
         const minHolders = parseInt(document.getElementById('minHolders').value) || 20;
+        
         if (holders < minHolders) {
-          addLog(`⚠️ ${mint.slice(0,8)}... → ${holders} holders (<${minHolders})`, 'warning');
+          addLog(`⚠️ ${mint.slice(0,8)}... ${holders} holders`, 'warning');
           return null;
         }
         
         const top = accounts.value[0];
         const topPercent = top ? (Number(top.amount) / 1e15) * 100 : 0;
         if (topPercent > 50) {
-          addLog(`⚠️ ${mint.slice(0,8)}... → dev détient ${topPercent.toFixed(0)}% (>50%)`, 'warning');
-          return null;
-        }
-        
-        // Vérifier liquidité > 0
-        if (holders === 0) {
-          addLog(`⚠️ ${mint.slice(0,8)}... → liquidité nulle`, 'warning');
+          addLog(`⚠️ ${mint.slice(0,8)}... dev ${topPercent.toFixed(0)}%`, 'warning');
           return null;
         }
         
         return { mint, holders, topPercent };
         
       } catch (err) {
-        addLog(`⚠️ Impossible d'analyser ${mint.slice(0,8)}...`, 'warning');
         return null;
       }
     }
 
     // ========================================
-    // ACHAT AVEC CRÉATION D'ATA
+    // ACHAT (100% SANS BUFFER)
     // ========================================
     
     async function buyToken(data) {
@@ -442,11 +435,11 @@
       const fee = parseInt(document.getElementById('priorityFee').value) || 100000;
 
       try {
-        addLog(`🔄 Préparation achat ${mint.slice(0,8)}... (${amountSol} SOL)`, 'info');
+        addLog(`🔄 Achat ${mint.slice(0,8)}... (${amountSol} SOL)`, 'info');
         const mintPk = new solanaWeb3.PublicKey(mint);
         const lamports = Math.floor(amountSol * 1e9);
         
-        // PDAs
+        // PDAs sans Buffer
         const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
           [new TextEncoder().encode('bonding-curve'), mintPk.toBuffer()],
           new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
@@ -470,40 +463,14 @@
           new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
         );
         
-        // Vérifier si ATA existe
-        const userAtaInfo = await connection.getAccountInfo(userAta);
-        const needsCreateAta = !userAtaInfo;
-        
+        // Transaction
         const tx = new solanaWeb3.Transaction();
         tx.add(
           solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: fee }),
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 100000 })
         );
         
-        // Créer ATA si nécessaire
-        if (needsCreateAta) {
-          addLog("🔨 Création ATA...", 'info');
-          tx.add(
-            solanaWeb3.SystemProgram.createAccount({
-              fromPubkey: provider.publicKey,
-              newAccountPubkey: userAta,
-              lamports: await connection.getMinimumBalanceForRentExemption(165),
-              space: 165,
-              programId: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
-            }),
-            new solanaWeb3.TransactionInstruction({
-              keys: [
-                { pubkey: userAta, isSigner: false, isWritable: true },
-                { pubkey: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'), isSigner: false, isWritable: false },
-                { pubkey: provider.publicKey, isSigner: true, isWritable: false }
-              ],
-              programId: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
-               new Uint8Array([9]) // InitializeAccount
-            })
-          );
-        }
-        
-        // Instruction d'achat
+        // Données instruction
         const instructionData = concatUint8Arrays([
           BUY_DISCRIMINATOR,
           writeBigUInt64LE(lamports),
@@ -524,7 +491,7 @@
             { pubkey: new solanaWeb3.PublicKey('SysvarRent111111111111111111111111111111111'), isSigner: false, isWritable: false }
           ],
           programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-           instructionData
+          data: instructionData
         }));
         
         const { blockhash } = await robustCall(() => connection.getLatestBlockhash());
@@ -542,20 +509,20 @@
         
         if (conf.value.err) throw new Error('TX failed');
         
-        addLog(`✅ ACHAT CONFIRMÉ ${mint.slice(0,8)}!`, 'success');
+        addLog(`✅ CONFIRMÉ ${mint.slice(0,8)}!`, 'success');
         stats.bought++;
         updateStats();
         await updateBalance();
         return true;
         
       } catch (err) {
-        addLog(`❌ Échec achat: ${err.message}`, 'error');
+        addLog(`❌ ${err.message}`, 'error');
         return false;
       }
     }
 
     // ========================================
-    // SCANNER AVEC VALIDATION
+    // SCANNER
     // ========================================
     
     async function scan() {
@@ -585,15 +552,11 @@
               const accs = ix.accounts;
               if (accs && accs.length > 2) {
                 const mint = accs[2].toString();
-                if (mint === '11111111111111111111111111111111') continue; // skip fake
-                
-                addLog(`🆕 Token détecté: ${mint.slice(0,8)}...`, 'info');
-                
-                // ✅ VALIDATION AUTOMATIQUE
-                const validData = await validateToken(mint);
-                if (validData) {
-                  addLog(`✅ Critères remplis → Achat en cours...`, 'success');
-                  await buyToken(validData);
+                addLog(`🆕 ${mint.slice(0,8)}...`, 'info');
+                const data = await analyzeToken(mint);
+                if (data) {
+                  addLog(`✅ OK! ${data.holders} holders`, 'success');
+                  await buyToken(data);
                 }
               }
             }
