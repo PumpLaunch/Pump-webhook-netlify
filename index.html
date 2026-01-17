@@ -25,8 +25,8 @@
   <div id="status">Vérification du wallet...</div>
 
   <script>
-    // ✅ Utilisez le RPC public pour éviter les erreurs 403/429
-    const RPC_URL = 'https://api.mainnet-beta.solana.com';
+    // ✅ RPC public officiel Solana (pas de clé API)
+    const PUBLIC_RPC = 'https://api.mainnet-beta.solana.com';
 
     const statusEl = document.getElementById('status');
     const connectBtn = document.getElementById('connectBtn');
@@ -34,41 +34,37 @@
     const addressEl = document.getElementById('address');
     const balanceEl = document.getElementById('balance');
 
-    let provider = null;
-    let connection = null;
-
     function log(msg) {
       statusEl.textContent = msg;
       console.log(msg);
     }
 
-    // Détection immédiate
+    // Vérification immédiate
     if (window.phantom?.solana?.isPhantom) {
       log("✅ Wallet détecté !");
       connectBtn.disabled = false;
-      connectBtn.onclick = connectWallet;
+      connectBtn.onclick = async () => {
+        try {
+          log("Connexion en cours...");
+          const provider = window.phantom.solana;
+          const { publicKey } = await provider.connect();
+          const pubKeyStr = publicKey.toString();
+
+          // ✅ Utilise uniquement le RPC public
+          const connection = new solanaWeb3.Connection(PUBLIC_RPC, 'confirmed');
+          const balanceLamports = await connection.getBalance(publicKey);
+          const balanceSol = balanceLamports / solanaWeb3.LAMPORTS_PER_SOL;
+
+          addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
+          balanceEl.textContent = balanceSol.toFixed(4);
+          appEl.style.display = 'block';
+          log("✅ Connecté !");
+        } catch (err) {
+          log(`❌ ${err.message || 'Annulé'}`);
+        }
+      };
     } else {
       log("❌ Ouvrez cette page dans l'app Phantom → Browser");
-    }
-
-    async function connectWallet() {
-      try {
-        provider = window.phantom.solana;
-        const { publicKey } = await provider.connect();
-        const pubKeyStr = publicKey.toString();
-
-        // ✅ Connexion au RPC public (pas de clé nécessaire)
-        connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
-        const balanceLamports = await connection.getBalance(publicKey);
-        const balanceSol = balanceLamports / solanaWeb3.LAMPORTS_PER_SOL;
-
-        addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
-        balanceEl.textContent = balanceSol.toFixed(4);
-        appEl.style.display = 'block';
-        log("✅ Connecté !");
-      } catch (err) {
-        log(`❌ ${err.message || 'Annulé'}`);
-      }
     }
   </script>
 </body>
