@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CryptoFlux Pro</title>
+  <title>CryptoFlux Pro - Pump.fun Sniper</title>
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   <style>
     :root {
@@ -14,6 +14,7 @@
       --text-secondary: #8892b0;
       --green: #00ff88;
       --purple: #9945ff;
+      --red: #ff3366;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -45,7 +46,13 @@
       border-radius: 12px;
       font-weight: 600;
       cursor: pointer;
+    }
+    .btn-primary {
       background: linear-gradient(135deg, var(--purple), var(--green));
+      color: white;
+    }
+    .btn-danger {
+      background: var(--red);
       color: white;
     }
     .card {
@@ -55,11 +62,32 @@
       padding: 1.2rem;
       margin-bottom: 1.2rem;
     }
+    .signal-item {
+      background: rgba(153, 69, 255, 0.1);
+      border-left: 3px solid var(--purple);
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 8px;
+    }
     .status {
       font-family: monospace;
       color: var(--text-secondary);
       margin-top: 12px;
       font-size: 0.9rem;
+    }
+    label {
+      display: block;
+      margin: 8px 0 4px;
+      font-weight: 500;
+    }
+    input, select {
+      width: 100%;
+      padding: 6px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: white;
+      margin-bottom: 8px;
     }
   </style>
 </head>
@@ -67,7 +95,7 @@
   <div class="container">
     <div class="header">
       <div class="logo">CryptoFlux Pro</div>
-      <button id="connectBtn" class="btn" disabled>Connecter Wallet</button>
+      <button id="connectBtn" class="btn btn-primary" disabled>Connecter Wallet</button>
     </div>
 
     <div id="app" style="display:none;">
@@ -76,9 +104,40 @@
         <div><strong>Solde :</strong> <span id="balance">Chargement...</span> SOL</div>
         <div><strong>Réseau :</strong> Mainnet</div>
       </div>
+
       <div class="card">
-        <h3>Trading Automatique</h3>
-        <button id="startScan" class="btn" disabled>Démarrer le Scan</button>
+        <h3>⚙️ Paramètres</h3>
+        <label>Achat (SOL):</label>
+        <input type="number" id="buyAmount" value="0.05" step="0.01" min="0.01">
+        
+        <label>Profit cible (%):</label>
+        <input type="number" id="profitTarget" value="50" min="1" placeholder="Ex: 50 = +50%">
+        
+        <label>Âge max (sec):</label>
+        <input type="number" id="maxAge" value="300" min="10">
+        
+        <label>Marketcap min ($):</label>
+        <input type="number" id="minMarketcap" value="10000" min="0">
+        
+        <label>Détenteurs min:</label>
+        <input type="number" id="minHolders" value="50" min="1">
+        
+        <label>Liquidité min (SOL):</label>
+        <input type="number" id="minLiquidity" value="5" min="0.1" step="0.1">
+        
+        <label>Frais prioritaires:</label>
+        <select id="priorityFee">
+          <option value="100000">Élevé</option>
+          <option value="1000000" selected>Turbo</option>
+          <option value="5000000">Extrême</option>
+        </select>
+        
+        <button id="toggleScan" class="btn btn-primary" style="margin-top: 12px;">▶️ Démarrer le Scan</button>
+      </div>
+
+      <div class="card">
+        <h3>🔔 Positions actives</h3>
+        <div id="positions">Aucune position</div>
       </div>
     </div>
 
@@ -88,18 +147,29 @@
   <script>
     // === CONFIGURATION ===
     const HELIUS_API_KEY = '8f852e97-a557-4065-be74-cc2a6547cd28';
+    const HELIUS_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
     const WEBHOOK_URL = 'https://pump-webhook-netlify.vercel.app/api/pump-signal';
-    const RPC_URL = 'https://api.mainnet-beta.solana.com'; // Public, pas de limite
+    const RPC_URL = HELIUS_RPC_URL;
+    const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
+    const PUMP_FEE_RECIPIENT = 'CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM';
+    const RENT_SYSVAR = 'SysvarRent111111111111111111111111111111111';
+    const BUY_DISCRIMINATOR = [0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea];
+    const SELL_DISCRIMINATOR = [0x66, 0x06, 0x3d, 0x12, 0x02, 0xda, 0xeb, 0xea];
 
     // === Éléments DOM ===
     const statusEl = document.getElementById('status');
     const connectBtn = document.getElementById('connectBtn');
-    const startScanBtn = document.getElementById('startScan');
-    const appEl = document.getElementById('app');
+    const toggleScanBtn = document.getElementById('toggleScan');
     const addressEl = document.getElementById('address');
     const balanceEl = document.getElementById('balance');
+    const positionsEl = document.getElementById('positions');
 
     let provider = null;
+    let connection = null;
+    let isScanning = false;
+    let scanInterval = null;
+    let lastMint = null;
+    const activePositions = new Map();
 
     // === UTILITAIRES ===
     function log(msg) {
@@ -114,13 +184,51 @@
       return null;
     }
 
+    function encodeU64(value) {
+      const buffer = new ArrayBuffer(8);
+      const view = new DataView(buffer);
+      view.setBigUint64(0, BigInt(value), true);
+      return new Uint8Array(buffer);
+    }
+
     async function getBalance(publicKey) {
       try {
-        const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
-        const balanceLamports = await connection.getBalance(publicKey);
-        return balanceLamports / solanaWeb3.LAMPORTS_PER_SOL;
+        const bal = await connection.getBalance(publicKey);
+        return bal / solanaWeb3.LAMPORTS_PER_SOL;
       } catch (err) {
         console.warn("⚠️ Impossible de charger le solde:", err.message);
+        return null;
+      }
+    }
+
+    async function getTokenPrice(mintAddress) {
+      try {
+        const res = await fetch(HELIUS_RPC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 'price',
+            method: 'getTokenMetadata',
+            params: { mint: mintAddress }
+          })
+        });
+        const data = await res.json();
+        const metadata = data.result;
+
+        if (!metadata || !metadata.pumpFun) return null;
+
+        const totalSupply = metadata.tokenInfo?.supply ? 
+          parseInt(metadata.tokenInfo.supply) / Math.pow(10, metadata.tokenInfo.decimals || 9) : 0;
+        const virtualSolReserves = metadata.pumpFun.virtualSolReserves || 0;
+        const pricePerToken = totalSupply > 0 ? virtualSolReserves / totalSupply : 0;
+
+        return {
+          priceSol: pricePerToken,
+          marketcapUsd: pricePerToken * virtualSolReserves * 150
+        };
+      } catch (err) {
+        console.error("Erreur prix:", err);
         return null;
       }
     }
@@ -138,12 +246,12 @@
         const { publicKey } = await walletProvider.connect();
         const pubKeyStr = publicKey.toString();
 
-        // Afficher l'adresse immédiatement
-        addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
-        appEl.style.display = 'block';
+        connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
         provider = walletProvider;
 
-        // Charger le solde en arrière-plan
+        addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
+        appEl.style.display = 'block';
+
         const balance = await getBalance(publicKey);
         if (balance !== null) {
           balanceEl.textContent = balance.toFixed(4);
@@ -151,7 +259,6 @@
           balanceEl.textContent = "—";
         }
 
-        startScanBtn.disabled = false;
         log("✅ Connecté !");
       } catch (err) {
         console.error(err);
@@ -159,64 +266,284 @@
       }
     }
 
-    // === SCANNER EN TEMPS RÉEL ===
-    let isScanning = false;
-    let scanInterval = null;
-    let lastMint = null;
+    // === ACHAT AVEC FILTRES AVANCÉS ===
+    async function buyToken(mintAddress) {
+      if (!provider || !connection || !provider.publicKey) {
+        log("❌ Wallet non connecté");
+        return;
+      }
 
+      const minHolders = parseInt(document.getElementById('minHolders').value) || 50;
+      const minLiquidity = parseFloat(document.getElementById('minLiquidity').value) || 5;
+
+      try {
+        log(`🔍 Analyse du token ${mintAddress}...`);
+
+        const priceData = await getTokenPrice(mintAddress);
+        if (!priceData || priceData.priceSol <= 0) {
+          log("❌ Liquidité nulle ou métadonnées introuvables");
+          return;
+        }
+
+        const holdersRes = await fetch(HELIUS_RPC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 'holders',
+            method: 'getTokenHolders',
+            params: { mint: mintAddress, limit: 1000 }
+          })
+        });
+        const holdersData = await holdersRes.json();
+        const holderCount = holdersData.result?.length || 0;
+
+        if (holderCount < minHolders) {
+          log(`❌ Trop peu de détenteurs (${holderCount} < ${minHolders})`);
+          return;
+        }
+
+        if (priceData.priceSol < minLiquidity) {
+          log(`❌ Liquidité insuffisante (${priceData.priceSol.toFixed(2)} SOL < ${minLiquidity} SOL)`);
+          return;
+        }
+
+        log(`✅ Token prometteur ! Détenteurs: ${holderCount}, Liquidité: ${priceData.priceSol.toFixed(2)} SOL`);
+
+        const buyAmountSol = parseFloat(document.getElementById('buyAmount').value) || 0.05;
+        const priorityFeeLamports = parseInt(document.getElementById('priorityFee').value) || 1000000;
+        const buyAmountLamports = buyAmountSol * solanaWeb3.LAMPORTS_PER_SOL;
+
+        const [pumpGlobal] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [Buffer.from("global")],
+          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
+        );
+        const [pumpTokenAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [Buffer.from("token_account"), new solanaWeb3.PublicKey(mintAddress).toBuffer()],
+          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
+        );
+        const [userTokenAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [
+            provider.publicKey.toBuffer(),
+            new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(),
+            new solanaWeb3.PublicKey(mintAddress).toBuffer()
+          ],
+          new solanaWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+        );
+
+        const transaction = new solanaWeb3.Transaction();
+        transaction.feePayer = provider.publicKey;
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+
+        transaction.add(
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeLamports })
+        );
+
+        const userTokenAccountInfo = await connection.getAccountInfo(userTokenAccount);
+        if (!userTokenAccountInfo) {
+          transaction.add(
+            solanaWeb3.SystemProgram.createAccount({
+              fromPubkey: provider.publicKey,
+              newAccountPubkey: userTokenAccount,
+              lamports: await connection.getMinimumBalanceForRentExemption(165),
+              space: 165,
+              programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+            }),
+            new solanaWeb3.TransactionInstruction({
+              keys: [
+                { pubkey: userTokenAccount, isSigner: false, isWritable: true },
+                { pubkey: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), isSigner: false, isWritable: false },
+                { pubkey: provider.publicKey, isSigner: true, isWritable: false }
+              ],
+              programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+               Buffer.from([9])
+            })
+          );
+        }
+
+        const buyInstruction = new solanaWeb3.TransactionInstruction({
+          keys: [
+            { pubkey: provider.publicKey, isSigner: true, isWritable: true },
+            { pubkey: pumpGlobal, isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey(PUMP_FEE_RECIPIENT), isSigner: false, isWritable: true },
+            { pubkey: pumpTokenAccount, isSigner: false, isWritable: true },
+            { pubkey: userTokenAccount, isSigner: false, isWritable: true },
+            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey(RENT_SYSVAR), isSigner: false, isWritable: false }
+          ],
+          programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
+           Buffer.concat([
+            Buffer.from(BUY_DISCRIMINATOR),
+            Buffer.from(encodeU64(buyAmountLamports))
+          ])
+        });
+
+        transaction.add(buyInstruction);
+        log("Demande de signature dans Phantom...");
+        const signed = await provider.signTransaction(transaction);
+        const txid = await connection.sendRawTransaction(signed.serialize());
+        log(`✅ Achat envoyé ! https://solscan.io/tx/${txid}`);
+
+        const profitTarget = parseFloat(document.getElementById('profitTarget').value) || 50;
+        const targetPrice = priceData.priceSol * (1 + profitTarget / 100);
+
+        activePositions.set(mintAddress, {
+          buyPrice: priceData.priceSol,
+          amountSol: buyAmountSol,
+          targetPrice: targetPrice,
+          txid: txid
+        });
+
+        updatePositionsUI();
+        monitorPositionForSale(mintAddress);
+
+      } catch (err) {
+        console.error(err);
+        log(`❌ Échec analyse/achat: ${err.message || err}`);
+        alert(`❌ Échec: ${err.message || 'Erreur inconnue'}`);
+      }
+    }
+
+    // === REVENTE RÉELLE ===
+    async function sellToken(mintAddress) {
+      if (!provider || !connection || !provider.publicKey) {
+        log("❌ Wallet non connecté");
+        return;
+      }
+
+      const position = activePositions.get(mintAddress);
+      if (!position) {
+        log("❌ Position introuvable");
+        return;
+      }
+
+      const priorityFeeLamports = parseInt(document.getElementById('priorityFee').value) || 1000000;
+
+      try {
+        log(`Préparation vente pour ${mintAddress}...`);
+
+        const [pumpGlobal] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [Buffer.from("global")],
+          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
+        );
+        const [pumpTokenAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [Buffer.from("token_account"), new solanaWeb3.PublicKey(mintAddress).toBuffer()],
+          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
+        );
+        const [userTokenAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [
+            provider.publicKey.toBuffer(),
+            new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(),
+            new solanaWeb3.PublicKey(mintAddress).toBuffer()
+          ],
+          new solanaWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+        );
+
+        const transaction = new solanaWeb3.Transaction();
+        transaction.feePayer = provider.publicKey;
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+
+        transaction.add(
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeLamports })
+        );
+
+        const sellInstruction = new solanaWeb3.TransactionInstruction({
+          keys: [
+            { pubkey: provider.publicKey, isSigner: true, isWritable: true },
+            { pubkey: pumpGlobal, isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey(PUMP_FEE_RECIPIENT), isSigner: false, isWritable: true },
+            { pubkey: pumpTokenAccount, isSigner: false, isWritable: true },
+            { pubkey: userTokenAccount, isSigner: false, isWritable: true },
+            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey(RENT_SYSVAR), isSigner: false, isWritable: false }
+          ],
+          programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
+           Buffer.concat([
+            Buffer.from(SELL_DISCRIMINATOR)
+          ])
+        });
+
+        transaction.add(sellInstruction);
+        log("Demande de signature pour vente...");
+        const signed = await provider.signTransaction(transaction);
+        const txid = await connection.sendRawTransaction(signed.serialize());
+        log(`✅ Vente envoyée ! https://solscan.io/tx/${txid}`);
+        alert(`✅ Vente réussie !\nhttps://solscan.io/tx/${txid}`);
+
+        activePositions.delete(mintAddress);
+        updatePositionsUI();
+
+      } catch (err) {
+        console.error(err);
+        log(`❌ Échec vente: ${err.message || err}`);
+        alert(`❌ Échec vente: ${err.message || 'Erreur inconnue'}`);
+      }
+    }
+
+    // === SURVEILLANCE POUR REVENTE AUTOMATIQUE ===
+    async function monitorPositionForSale(mint) {
+      if (!activePositions.has(mint)) return;
+
+      const checkPrice = async () => {
+        const position = activePositions.get(mint);
+        if (!position || !position.targetPrice) {
+          setTimeout(checkPrice, 5000);
+          return;
+        }
+
+        const priceData = await getTokenPrice(mint);
+        if (priceData && priceData.priceSol >= position.targetPrice) {
+          log(`🎯 Profit atteint pour ${mint} ! Vente automatique...`);
+          sellToken(mint);
+        } else {
+          setTimeout(checkPrice, 5000);
+        }
+      };
+
+      checkPrice();
+    }
+
+    // === UI POSITIONS ===
+    function updatePositionsUI() {
+      if (activePositions.size === 0) {
+        positionsEl.innerHTML = "Aucune position";
+        return;
+      }
+
+      let html = '';
+      for (const [mint, pos] of activePositions.entries()) {
+        const currentProfit = pos.buyPrice ? ((pos.targetPrice / pos.buyPrice - 1) * 100).toFixed(1) : '?';
+        html += `
+          <div class="signal-item">
+            <strong>${mint.slice(0,8)}...</strong><br>
+            Achat: ${pos.buyPrice ? pos.buyPrice.toFixed(6) : '?'} SOL<br>
+            Cible: ${pos.targetPrice ? pos.targetPrice.toFixed(6) : '?'} SOL (+${currentProfit}%)<br>
+            Tx: <a href="https://solscan.io/tx/${pos.txid}" target="_blank" style="color:#00ff88;">voir</a><br>
+            <button class="btn btn-danger" onclick="sellToken('${mint}')">Vendre maintenant</button>
+          </div>
+        `;
+      }
+      positionsEl.innerHTML = html;
+    }
+
+    // === SCANNER EN TEMPS RÉEL ===
     async function pollForSignals() {
       try {
         const res = await fetch(WEBHOOK_URL);
         const data = await res.json();
         if (data.mint && data.mint !== lastMint) {
           lastMint = data.mint;
-          log(`🔔 Nouveau token: ${data.mint}`);
-          alert(`Nouveau token détecté !\n${data.mint}`);
+          buyToken(data.mint);
         }
       } catch (err) {
         console.error("Polling échoué:", err);
       }
     }
 
-    function toggleScan() {
-      if (isScanning) {
-        clearInterval(scanInterval);
-        isScanning = false;
-        startScanBtn.textContent = "Démarrer le Scan";
-        log("⏹️ Scan arrêté");
-      } else {
-        isScanning = true;
-        startScanBtn.textContent = "Arrêter le Scan";
-        scanInterval = setInterval(pollForSignals, 3000);
-        log("🔍 Scan activé");
-      }
-    }
-
-    // === DÉTECTION DU WALLET ===
-    let attempts = 0;
-    const maxAttempts = 10;
-
-    function detectWallet() {
-      const provider = getProvider();
-      if (provider) {
-        log("✅ Wallet détecté !");
-        connectBtn.disabled = false;
-        connectBtn.onclick = connectWallet;
-        return;
-      }
-
-      attempts++;
-      if (attempts < maxAttempts) {
-        log(`⏳ Détection (${attempts}/${maxAttempts})...`);
-        setTimeout(detectWallet, 600);
-      } else {
-        log("❌ Ouvrez cette page dans l'app Phantom → Browser");
-      }
-    }
-
-    // === INITIALISATION ===
-    detectWallet();
-    startScanBtn.onclick = toggleScan;
-  </script>
-</body>
-</html>
+  
