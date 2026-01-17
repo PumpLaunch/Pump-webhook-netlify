@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Pump Sniper Pro</title>
+  <!-- ✅ URL corrigée : pas d'espace à la fin -->
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   <style>
     :root {
@@ -145,7 +146,7 @@
   <div class="container">
     <div class="header">
       <div class="logo">⚡ PUMP SNIPER</div>
-      <button id="connectBtn" class="btn btn-primary" disabled>Connecter</button>
+      <button id="connectBtn" class="btn btn-primary">Connecter</button>
     </div>
 
     <div id="app" style="display:none;">
@@ -222,7 +223,7 @@
       </div>
     </div>
 
-    <div id="status" class="status">Vérification Phantom...</div>
+    <div id="status" class="status">Cliquez sur "Connecter"</div>
   </div>
 
   <script>
@@ -274,7 +275,7 @@
     let scanInterval = null;
     let seenTokens = new Set();
     let stats = { scanned: 0 };
-    let currentTrade = null; // { mint, buyPrice, targetPrice, txid }
+    let currentTrade = null;
     
     const statusEl = document.getElementById('status');
     const connectBtn = document.getElementById('connectBtn');
@@ -399,64 +400,60 @@
     }
 
     // ========================================
-    // CONNEXION
+    // CONNEXION AU CLIC (CORRIGÉ)
     // ========================================
     
-    if (window.phantom?.solana?.isPhantom) {
-      addLog("✅ Phantom OK");
-      connectBtn.disabled = false;
+    connectBtn.onclick = async () => {
+      // ✅ Vérification au moment du clic
+      if (!window.phantom?.solana?.isPhantom) {
+        addLog("❌ Ouvrez cette page dans l'app Phantom → Browser", 'error');
+        return;
+      }
       
-      connectBtn.onclick = async () => {
-        try {
-          addLog("🔄 Connexion...");
-          provider = window.phantom.solana;
-          
-          const { publicKey } = await provider.connect();
-          connection = createConnection();
-          
-          const addr = publicKey.toString();
-          addressEl.textContent = `${addr.slice(0,6)}...${addr.slice(-4)}`;
-          
-          await updateBalance();
-          
-          appEl.style.display = 'block';
-          connectBtn.style.display = 'none';
-          
-          addLog("✅ Connecté!", 'success');
-          setInterval(updateBalance, 30000);
-          
-        } catch (err) {
-          addLog(`❌ ${err.message}`, 'error');
-        }
-      };
-    } else {
-      addLog("❌ Installez Phantom", 'error');
-    }
+      try {
+        addLog("🔄 Connexion...");
+        provider = window.phantom.solana;
+        
+        const { publicKey } = await provider.connect();
+        connection = createConnection();
+        
+        const addr = publicKey.toString();
+        addressEl.textContent = `${addr.slice(0,6)}...${addr.slice(-4)}`;
+        
+        await updateBalance();
+        
+        appEl.style.display = 'block';
+        connectBtn.style.display = 'none';
+        
+        addLog("✅ Connecté!", 'success');
+        setInterval(updateBalance, 30000);
+        
+      } catch (err) {
+        addLog(`❌ ${err.message}`, 'error');
+      }
+    };
 
     // ========================================
-    // VALIDATION TOKEN (AVEC LIQUIDITÉ EN €)
+    // VALIDATION TOKEN
     // ========================================
     
     async function validateToken(mint) {
       try {
-        // Prix et liquidité via Helius
         const priceData = await getTokenPrice(mint);
-        if (!priceData) {
-          addLog(`⚠️ ${mint.slice(0,8)}... → Données introuvables`, 'warning');
-          return null;
-        }
+        if (!priceData) return null;
         
-        const liquiditySol = priceData.priceSol * (await connection.getTokenSupply(new solanaWeb3.PublicKey(mint))).value.uiAmount;
-        const liquidityUsd = liquiditySol * 150;
-        const liquidityEur = liquidityUsd * 0.91;
+        // Estimation liquidité (via supply × prix)
+        const supplyRes = await connection.getTokenSupply(new solanaWeb3.PublicKey(mint));
+        const totalSupply = supplyRes.value.uiAmount || 0;
+        const liquiditySol = priceData.priceSol * totalSupply;
+        const liquidityEur = liquiditySol * 150 * 0.91;
         
         const minLiquidityEur = parseFloat(document.getElementById('minLiquidityEur').value) || 10000;
         if (liquidityEur < minLiquidityEur) {
-          addLog(`⚠️ ${mint.slice(0,8)}... → ${liquidityEur.toFixed(0)} € (<${minLiquidityEur} €)`, 'warning');
+          addLog(`⚠️ ${mint.slice(0,8)}... → ${Math.round(liquidityEur)} € (<${minLiquidityEur} €)`, 'warning');
           return null;
         }
         
-        // Détenteurs
         const accounts = await robustCall(() => connection.getTokenLargestAccounts(new solanaWeb3.PublicKey(mint)));
         const holders = accounts.value.length;
         const minHolders = parseInt(document.getElementById('minHolders').value) || 20;
@@ -465,7 +462,6 @@
           return null;
         }
         
-        // Concentration
         const top = accounts.value[0];
         const topPercent = top ? (Number(top.amount) / 1e15) * 100 : 0;
         if (topPercent > 50) {
@@ -482,7 +478,7 @@
     }
 
     // ========================================
-    // ACHAT AVEC CRÉATION D'ATA
+    // ACHAT + MODE FOCUS
     // ========================================
     
     async function buyToken(data) {
@@ -497,7 +493,6 @@
         const mintPk = new solanaWeb3.PublicKey(mint);
         const lamports = Math.floor(amountSol * 1e9);
         
-        // PDAs
         const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
           [new TextEncoder().encode('bonding-curve'), mintPk.toBuffer()],
           new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
@@ -521,7 +516,6 @@
           new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
         );
         
-        // Vérifier ATA
         const userAtaInfo = await connection.getAccountInfo(userAta);
         const needsCreateAta = !userAtaInfo;
         
@@ -603,7 +597,6 @@
         updateStats();
         addLog(`🎯 Focus sur ${mint.slice(0,8)}... → Cible: ${targetPrice.toFixed(6)} SOL`, 'success');
         
-        // Arrêter le scan
         if (scanInterval) {
           clearInterval(scanInterval);
           scanInterval = null;
@@ -613,7 +606,6 @@
           stopAllBtn.style.display = "none";
         }
         
-        // Lancer surveillance
         monitorForSale();
         return true;
         
@@ -711,7 +703,6 @@
         addLog(`✅ VENTE CONFIRMÉE ${mintAddress.slice(0,8)}!`, 'success');
         addLog(`🔗 solscan.io/tx/${sig}`, 'info');
         
-        // Réinitialiser
         currentTrade = null;
         updateStats();
         
@@ -725,7 +716,7 @@
     // ========================================
     
     async function scan() {
-      if (currentTrade) return; // Ne pas scanner si trade en cours
+      if (currentTrade) return;
       
       try {
         const sigs = await robustCall(() =>
