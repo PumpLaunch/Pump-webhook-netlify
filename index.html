@@ -69,21 +69,20 @@
   </div>
 
   <script>
-    // ✅ RPC alternatif gratuit (fonctionne avec Phantom)
-    const RPC_URL = 'https://solana-mainnet.g.alchemy.com/v2/demo';
-
     const statusEl = document.getElementById('status');
     const connectBtn = document.getElementById('connectBtn');
     const appEl = document.getElementById('app');
     const addressEl = document.getElementById('address');
     const balanceEl = document.getElementById('balance');
 
+    let provider = null;
+
     function log(msg) {
       statusEl.textContent = msg;
       console.log('[CryptoFlux]', msg);
     }
 
-    // Vérification immédiate du wallet
+    // Vérification immédiate
     if (window.phantom?.solana?.isPhantom) {
       log("✅ Wallet détecté !");
       connectBtn.disabled = false;
@@ -91,7 +90,7 @@
       connectBtn.onclick = async () => {
         try {
           log("Connexion en cours...");
-          const provider = window.phantom.solana;
+          provider = window.phantom.solana;
           
           // Force une nouvelle session
           if (provider.disconnect) await provider.disconnect().catch(() => {});
@@ -101,9 +100,8 @@
           
           const pubKeyStr = publicKey.toString();
           
-          // ✅ Utilise le RPC Alchemy (pas de clé API nécessaire)
-          const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
-          const balanceLamports = await connection.getBalance(publicKey);
+          // ✅ Utilise la connexion intégrée de Phantom (pas de fetch externe)
+          const balanceLamports = await provider.getBalance();
           const balanceSol = balanceLamports / solanaWeb3.LAMPORTS_PER_SOL;
 
           addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
