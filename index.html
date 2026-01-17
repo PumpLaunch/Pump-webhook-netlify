@@ -221,7 +221,7 @@
 
   <script>
     // ========================================
-    // CONFIGURATION MULTI-RPC (AJUSTÉ AVEC VOTRE CLÉ)
+    // CONFIGURATION MULTI-RPC
     // ========================================
     
     const RPC_ENDPOINTS = [
@@ -234,8 +234,30 @@
     let currentRpcIndex = 0;
     
     const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
-    const BUY_DISCRIMINATOR = [0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea];
+    const BUY_DISCRIMINATOR = new Uint8Array([0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea]);
     
+    // ========================================
+    // UTILITAIRES SANS BUFFER
+    // ========================================
+    
+    function writeBigUInt64LE(value) {
+      const buffer = new ArrayBuffer(8);
+      const view = new DataView(buffer);
+      view.setBigUint64(0, BigInt(value), true);
+      return new Uint8Array(buffer);
+    }
+
+    function concatUint8Arrays(arrays) {
+      const totalLength = arrays.reduce((acc, arr) => acc + arr.length, 0);
+      const result = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const arr of arrays) {
+        result.set(arr, offset);
+        offset += arr.length;
+      }
+      return result;
+    }
+
     // ========================================
     // VARIABLES
     // ========================================
@@ -412,14 +434,14 @@
     }
 
     // ========================================
-    // ACHAT
+    // ACHAT (SANS BUFFER)
     // ========================================
     
     async function buyToken(data) {
       if (!provider || !connection) return false;
 
       const mint = data.mint;
-      const amountSol = parseFloat(document.getElementById('buyAmount').value) || 0.01;
+      const amountSol = parseFloat(document.getElementById('buyAmount').value) || 0.005;
       const fee = parseInt(document.getElementById('priorityFee').value) || 100000;
 
       try {
@@ -460,15 +482,12 @@
           solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 100000 })
         );
         
-        // Instruction d'achat
-        const amountBuf = Buffer.alloc(8);
-        amountBuf.writeBigUInt64LE(BigInt(lamports), 0);
+        // Préparer les données de l'instruction
+        const amountBuf = writeBigUInt64LE(lamports);
+        const maxBuf = writeBigUInt64LE(lamports);
         
-        const maxBuf = Buffer.alloc(8);
-        maxBuf.writeBigUInt64LE(BigInt(lamports), 0);
-        
-        const data = Buffer.concat([
-          Buffer.from(BUY_DISCRIMINATOR),
+        const instructionData = concatUint8Arrays([
+          BUY_DISCRIMINATOR,
           amountBuf,
           maxBuf
         ]);
@@ -487,7 +506,7 @@
             { pubkey: new solanaWeb3.PublicKey('SysvarRent111111111111111111111111111111111'), isSigner: false, isWritable: false }
           ],
           programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-          data
+          data: instructionData
         }));
         
         const { blockhash } = await robustCall(async () => {
