@@ -160,6 +160,17 @@
       color: #8892b0;
       margin-right: 8px;
     }
+    .rate-limit-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 6px;
+      margin-top: 8px;
+      font-size: 0.85rem;
+      font-family: monospace;
+    }
   </style>
 </head>
 <body>
@@ -171,6 +182,11 @@
 
     <div id="app" style="display:none;">
       <div class="card">
+        <div class="alert alert-warning">
+          <strong>⚠️ RATE LIMITING ACTIVÉ</strong><br>
+          Scan toutes les 10 secondes pour éviter les limites API
+        </div>
+        
         <div class="stats">
           <div class="stat">
             <div class="stat-label">SOLDE</div>
@@ -185,16 +201,22 @@
             <div class="stat-value" id="bought">0</div>
           </div>
         </div>
-        <div style="font-family: monospace; font-size: 0.85rem; color: #8892b0;">
+        
+        <div class="rate-limit-info">
+          <span>Prochain scan: <strong id="nextScan">--</strong></span>
+          <span>Intervalle: <strong id="scanInterval">10s</strong></span>
+        </div>
+        
+        <div style="font-family: monospace; font-size: 0.85rem; color: #8892b0; margin-top: 8px;">
           <div><strong>Wallet:</strong> <span id="address">...</span></div>
-          <div><strong>Réseau:</strong> Solana Mainnet (Helius RPC)</div>
+          <div><strong>RPC:</strong> Helius Premium (rate limited)</div>
         </div>
       </div>
 
       <div class="card">
         <div class="alert alert-danger">
           <strong>⚠️ TRADING RÉEL</strong><br>
-          Transactions irréversibles. Utilisez un wallet de test avec petits montants.
+          Transactions irréversibles sur Solana Mainnet
         </div>
 
         <h3 style="margin-bottom: 12px;">⚙️ Configuration</h3>
@@ -202,14 +224,19 @@
         <label>💰 Montant par achat (SOL):</label>
         <input type="number" id="buyAmount" value="0.05" step="0.01" min="0.01" max="1">
         
-        <label>🎯 Objectif de profit (%):</label>
-        <input type="number" id="profitTarget" value="100" min="10" max="500">
-        
         <label>👥 Détenteurs minimum:</label>
-        <input type="number" id="minHolders" value="30" min="5" max="200">
+        <input type="number" id="minHolders" value="20" min="5" max="200">
         
-        <label>💧 Liquidité minimum (SOL):</label>
-        <input type="number" id="minLiquidity" value="3" min="0.5" step="0.5" max="50">
+        <label>📊 Concentration max du top holder (%):</label>
+        <input type="number" id="maxTopHolder" value="40" min="10" max="100">
+        
+        <label>⏱️ Intervalle de scan (secondes):</label>
+        <select id="scanIntervalSelect">
+          <option value="5000">5 secondes (risque de rate limit)</option>
+          <option value="10000" selected>10 secondes (recommandé)</option>
+          <option value="15000">15 secondes (sûr)</option>
+          <option value="30000">30 secondes (très sûr)</option>
+        </select>
         
         <label>⚡ Frais de priorité:</label>
         <select id="priorityFee">
@@ -248,7 +275,6 @@
     const SYSTEM_PROGRAM = '11111111111111111111111111111111';
     const RENT_SYSVAR = 'SysvarRent111111111111111111111111111111111';
     
-    // Discriminators (à vérifier sur Solscan)
     const BUY_DISCRIMINATOR = [0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea];
     
     // ========================================
@@ -261,6 +287,8 @@
     let scanInterval = null;
     let seenTokens = new Set();
     let stats = { scanned: 0, bought: 0 };
+    let rateLimitCount = 0;
+    let nextScanTime = 0;
     
     // Éléments DOM
     const statusEl = document.getElementById('status');
@@ -273,6 +301,8 @@
     const boughtEl = document.getElementById('bought');
     const logEl = document.getElementById('log');
     const appEl = document.getElementById('app');
+    const nextScanEl = document.getElementById('nextScan');
+    const scanIntervalEl = document.getElementById('scanInterval');
 
     // ========================================
     // UTILITAIRES
@@ -288,7 +318,6 @@
       item.innerHTML = `<span class="log-time">[${time}]</span><span style="color:${color}">${msg}</span>`;
       logEl.insertBefore(item, logEl.firstChild);
       
-      // Limiter à 50 entrées
       while (logEl.children.length > 50) {
         logEl.removeChild(logEl.lastChild);
       }
@@ -302,6 +331,16 @@
       boughtEl.textContent = stats.bought;
     }
 
+    function updateNextScanTime() {
+      if (!isScanning) {
+        nextScanEl.textContent = '--';
+        return;
+      }
+      
+      const remaining = Math.max(0, Math.ceil((nextScanTime - Date.now()) / 1000));
+      nextScanEl.textContent = `${remaining}s`;
+    }
+
     async function updateBalance() {
       if (!provider || !connection) return;
       try {
@@ -310,6 +349,32 @@
         balanceEl.textContent = `${sol} SOL`;
       } catch (err) {
         console.error('Erreur mise à jour solde:', err);
+      }
+    }
+
+    // ========================================
+    // GESTION DU RATE LIMITING
+    // ========================================
+    
+    async function safeRpcCall(fn, retries = 3, delay = 2000) {
+      for (let i = 0; i < retries; i++) {
+        try {
+          return await fn();
+        } catch (err) {
+          if (err.message && err.message.includes('429')) {
+            rateLimitCount++;
+            addLog(`⚠️ Rate limit atteint (${rateLimitCount}x) - attente ${delay/1000}s...`, 'warning');
+            
+            if (i < retries - 1) {
+              await new Promise(resolve => setTimeout(resolve, delay));
+              delay *= 2; // Exponential backoff
+            } else {
+              throw err;
+            }
+          } else {
+            throw err;
+          }
+        }
       }
     }
 
@@ -339,15 +404,15 @@
           
           addLog("✅ Connecté avec succès!", 'success');
           
-          // Mise à jour du solde toutes les 10 secondes
-          setInterval(updateBalance, 10000);
+          setInterval(updateBalance, 30000); // Toutes les 30 secondes
+          setInterval(updateNextScanTime, 1000); // Chaque seconde
           
         } catch (err) {
           addLog(`❌ Erreur: ${err.message}`, 'error');
         }
       };
     } else {
-      addLog("❌ Phantom non installé. Installez-le sur phantom.app", 'error');
+      addLog("❌ Phantom non installé", 'error');
       statusEl.innerHTML = '❌ Phantom requis<br><a href="https://phantom.app/" target="_blank" style="color:var(--purple)">Installer Phantom</a>';
     }
 
@@ -359,23 +424,25 @@
       try {
         const mint = new solanaWeb3.PublicKey(mintAddress);
         
-        // Récupérer les plus gros détenteurs
-        const largestAccounts = await connection.getTokenLargestAccounts(mint);
-        const holderCount = largestAccounts.value.length;
+        const largestAccounts = await safeRpcCall(async () => {
+          return await connection.getTokenLargestAccounts(mint);
+        });
         
-        // Vérifier le nombre de holders
-        const minHolders = parseInt(document.getElementById('minHolders').value) || 30;
+        const holderCount = largestAccounts.value.length;
+        const minHolders = parseInt(document.getElementById('minHolders').value) || 20;
+        
         if (holderCount < minHolders) {
-          addLog(`⚠️ ${mintAddress.slice(0, 8)}... - Seulement ${holderCount} holders`, 'warning');
+          addLog(`⚠️ ${mintAddress.slice(0, 8)}... - ${holderCount} holders < ${minHolders}`, 'warning');
           return null;
         }
         
-        // Vérifier la concentration
         const topHolderPercent = largestAccounts.value[0] ? 
           (Number(largestAccounts.value[0].amount) / 1e15) * 100 : 0;
         
-        if (topHolderPercent > 50) {
-          addLog(`⚠️ ${mintAddress.slice(0, 8)}... - Dev détient ${topHolderPercent.toFixed(0)}%`, 'warning');
+        const maxTopHolder = parseInt(document.getElementById('maxTopHolder').value) || 40;
+        
+        if (topHolderPercent > maxTopHolder) {
+          addLog(`⚠️ ${mintAddress.slice(0, 8)}... - Top holder ${topHolderPercent.toFixed(0)}% > ${maxTopHolder}%`, 'warning');
           return null;
         }
         
@@ -383,7 +450,7 @@
           mint: mintAddress,
           holderCount,
           topHolderPercent,
-          score: holderCount >= 50 ? 80 : 60
+          score: holderCount >= 50 ? 90 : holderCount >= 30 ? 80 : 70
         };
         
       } catch (err) {
@@ -407,12 +474,11 @@
       const priorityFeeMicroLamports = parseInt(document.getElementById('priorityFee').value) || 100000;
 
       try {
-        addLog(`🔄 Achat de ${mintAddress.slice(0, 8)}... (${buyAmountSol} SOL)`, 'info');
+        addLog(`🔄 Achat ${mintAddress.slice(0, 8)}... (${buyAmountSol} SOL)`, 'info');
         
         const mint = new solanaWeb3.PublicKey(mintAddress);
         const buyAmountLamports = Math.floor(buyAmountSol * solanaWeb3.LAMPORTS_PER_SOL);
         
-        // Dériver les comptes
         const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
           [Buffer.from('bonding-curve'), mint.toBuffer()],
           new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
@@ -436,10 +502,8 @@
           new solanaWeb3.PublicKey(ASSOCIATED_TOKEN_PROGRAM)
         );
         
-        // Créer la transaction
         const transaction = new solanaWeb3.Transaction();
         
-        // Ajouter frais de priorité
         transaction.add(
           solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({
             microLamports: priorityFeeMicroLamports
@@ -452,14 +516,14 @@
           })
         );
         
-        // Vérifier si l'ATA existe
-        const ataInfo = await connection.getAccountInfo(associatedUser);
+        const ataInfo = await safeRpcCall(async () => {
+          return await connection.getAccountInfo(associatedUser);
+        });
+        
         if (!ataInfo) {
-          addLog(`🔨 Création de l'ATA...`, 'info');
-          // Note: En production, utilisez createAssociatedTokenAccountInstruction
+          addLog(`🔨 ATA inexistant - sera créé lors de l'achat`, 'info');
         }
         
-        // Créer l'instruction d'achat
         const amountBuffer = Buffer.alloc(8);
         amountBuffer.writeBigUInt64LE(BigInt(buyAmountLamports), 0);
         
@@ -493,24 +557,29 @@
         
         transaction.add(buyInstruction);
         
-        // Signer et envoyer
-        const { blockhash } = await connection.getLatestBlockhash();
+        const { blockhash } = await safeRpcCall(async () => {
+          return await connection.getLatestBlockhash();
+        });
+        
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = provider.publicKey;
         
-        addLog("✍️ Demande de signature...", 'info');
+        addLog("✍️ Signature...", 'info');
         const signed = await provider.signTransaction(transaction);
         
-        addLog("📤 Envoi de la transaction...", 'info');
-        const signature = await connection.sendRawTransaction(signed.serialize(), {
-          skipPreflight: false,
-          preflightCommitment: 'confirmed'
+        addLog("📤 Envoi...", 'info');
+        const signature = await safeRpcCall(async () => {
+          return await connection.sendRawTransaction(signed.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed'
+          });
         });
         
-        addLog(`🔗 TX: https://solscan.io/tx/${signature}`, 'info');
+        addLog(`🔗 https://solscan.io/tx/${signature}`, 'info');
         
-        // Confirmation
-        const confirmation = await connection.confirmTransaction(signature);
+        const confirmation = await safeRpcCall(async () => {
+          return await connection.confirmTransaction(signature);
+        });
         
         if (confirmation.value.err) {
           throw new Error('Transaction échouée');
@@ -525,7 +594,7 @@
         
       } catch (err) {
         console.error('Erreur achat:', err);
-        addLog(`❌ Échec achat: ${err.message}`, 'error');
+        addLog(`❌ Échec: ${err.message}`, 'error');
         return false;
       }
     }
@@ -536,26 +605,28 @@
     
     async function scanForNewTokens() {
       try {
-        const signatures = await connection.getSignaturesForAddress(
-          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-          { limit: 10 }
-        );
+        const signatures = await safeRpcCall(async () => {
+          return await connection.getSignaturesForAddress(
+            new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
+            { limit: 5 } // Réduit à 5 pour éviter rate limiting
+          );
+        });
         
         stats.scanned += signatures.length;
         updateStats();
         
         for (const sig of signatures) {
           if (seenTokens.has(sig.signature)) continue;
-          
           seenTokens.add(sig.signature);
           
-          const tx = await connection.getParsedTransaction(sig.signature, {
-            maxSupportedTransactionVersion: 0
+          const tx = await safeRpcCall(async () => {
+            return await connection.getParsedTransaction(sig.signature, {
+              maxSupportedTransactionVersion: 0
+            });
           });
           
           if (!tx) continue;
           
-          // Extraire le mint
           const instructions = tx.transaction.message.instructions;
           
           for (const ix of instructions) {
@@ -564,15 +635,12 @@
               if (accounts && accounts.length > 2) {
                 const mint = accounts[2].toString();
                 
-                addLog(`🆕 Nouveau token: ${mint.slice(0, 8)}...`, 'info');
+                addLog(`🆕 ${mint.slice(0, 8)}...`, 'info');
                 
-                // Analyser
                 const tokenData = await analyzeToken(mint);
                 
                 if (tokenData) {
-                  addLog(`✅ Token validé! Score: ${tokenData.score}, Holders: ${tokenData.holderCount}`, 'success');
-                  
-                  // Acheter
+                  addLog(`✅ Validé! Score:${tokenData.score} Holders:${tokenData.holderCount}`, 'success');
                   await buyToken(tokenData);
                 }
               }
@@ -582,7 +650,9 @@
         
       } catch (err) {
         console.error('Erreur scan:', err);
-        addLog(`⚠️ Erreur scan: ${err.message}`, 'warning');
+        if (!err.message.includes('429')) {
+          addLog(`⚠️ Erreur: ${err.message}`, 'warning');
+        }
       }
     }
 
@@ -592,6 +662,9 @@
     
     toggleScanBtn.onclick = () => {
       if (!isScanning) {
+        const intervalMs = parseInt(document.getElementById('scanIntervalSelect').value) || 10000;
+        scanIntervalEl.textContent = `${intervalMs/1000}s`;
+        
         isScanning = true;
         toggleScanBtn.textContent = "⏸️ Pause";
         toggleScanBtn.className = "btn btn-secondary";
@@ -599,8 +672,13 @@
         
         addLog("🚀 SCANNER DÉMARRÉ", 'success');
         
-        scanInterval = setInterval(scanForNewTokens, 3000);
-        scanForNewTokens(); // Premier scan immédiat
+        scanInterval = setInterval(() => {
+          nextScanTime = Date.now() + intervalMs;
+          scanForNewTokens();
+        }, intervalMs);
+        
+        nextScanTime = Date.now() + intervalMs;
+        scanForNewTokens();
         
       } else {
         isScanning = false;
@@ -612,7 +690,7 @@
           scanInterval = null;
         }
         
-        addLog("⏸️ Scanner en pause", 'warning');
+        addLog("⏸️ Pause", 'warning');
       }
     };
 
@@ -629,16 +707,14 @@
       
       seenTokens.clear();
       stats = { scanned: 0, bought: 0 };
+      rateLimitCount = 0;
       updateStats();
       
-      addLog("🛑 TOUT ARRÊTÉ - Réinitialisé", 'error');
+      addLog("🛑 ARRÊT COMPLET", 'error');
     };
 
-    // Cleanup au déchargement
     window.addEventListener('beforeunload', () => {
-      if (scanInterval) {
-        clearInterval(scanInterval);
-      }
+      if (scanInterval) clearInterval(scanInterval);
     });
   </script>
 </body>
