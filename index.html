@@ -49,6 +49,10 @@
       cursor: pointer;
       transition: all 0.3s;
     }
+    .btn-small {
+      padding: 4px 8px;
+      font-size: 0.8rem;
+    }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-primary {
       background: linear-gradient(135deg, var(--purple), var(--green));
@@ -138,8 +142,14 @@
     .log-item {
       padding: 4px 0;
       border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .log-time { color: #8892b0; margin-right: 8px; }
+    .position-item > span {
+      margin-right: 8px;
+    }
   </style>
 </head>
 <body>
@@ -215,6 +225,12 @@
         <h3 style="margin-bottom: 8px;">📜 Activité</h3>
         <div id="log" class="log"></div>
       </div>
+
+      <div class="card">
+        <h3 style="margin-bottom: 8px;">💼 Positions</h3>
+        <div id="positions" class="log"></div>
+        <button id="refreshPositions" class="btn btn-secondary" style="margin-top: 8px;">🔄 Rafraîchir</button>
+      </div>
     </div>
 
     <div id="status" class="status">Démarrage...</div>
@@ -235,6 +251,7 @@
     let currentRpcIndex = 0;
     const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
     const BUY_DISCRIMINATOR = new Uint8Array([102, 6, 61, 18, 1, 218, 235, 234]);
+    const SELL_DISCRIMINATOR = new Uint8Array([51, 230, 133, 164, 1, 127, 131, 173]);
     const CREATE_DISCRIMINATOR = new Uint8Array([24, 30, 200, 40, 5, 28, 7, 119]);
     
     // ========================================
@@ -274,6 +291,11 @@
     let subscriptionId = null;
     let seenTokens = new Set();
     let stats = { scanned: 0, bought: 0 };
+    let positions = JSON.parse(localStorage.getItem('positions') || '[]');
+    
+    const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+    const programId = new solanaWeb3.PublicKey(PUMP_PROGRAM_ID);
     
     const statusEl = document.getElementById('status');
     const connectBtn = document.getElementById('connectBtn');
@@ -286,6 +308,8 @@
     const logEl = document.getElementById('log');
     const appEl = document.getElementById('app');
     const rpcStatusEl = document.getElementById('rpcStatus');
+    const positionsEl = document.getElementById('positions');
+    const refreshPositionsBtn = document.getElementById('refreshPositions');
 
     // ========================================
     // UTILITAIRES
@@ -388,6 +412,7 @@
           
           addLog("✅ Connecté automatiquement!", 'success');
           setInterval(updateBalance, 30000);
+          updatePositions();
           
         } catch (err) {
           addLog(`❌ ${err.message}`, 'error');
@@ -404,6 +429,36 @@
     connectBtn.onclick = autoConnect;
 
     // ========================================
+    // FONCTION ESTIMATION SOL OUT
+    // ========================================
+    
+    async function getEstimatedSolOut(mint, tokenAmount) {
+      try {
+        const mintPubkey = new solanaWeb3.PublicKey(mint);
+        const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [new TextEncoder().encode('bonding-curve'), mintPubkey.toBuffer()],
+          programId
+        );
+
+        const bondingData = await robustCall(() => connection.getAccountInfo(bondingCurve));
+        if (!bondingData) return 0;
+
+        const data = bondingData.data;
+        const v_token = readBigUInt64LE(data, 8);
+        const v_sol = readBigUInt64LE(data, 16);
+
+        const token_in = BigInt(tokenAmount);
+        if (token_in === 0n) return 0;
+
+        const sol_out = (token_in * v_sol) / (v_token + token_in);
+        return Number(sol_out) / 1e9;
+      } catch (err) {
+        addLog(`⚠️ Erreur estimation: ${err.message}`, 'warning');
+        return 0;
+      }
+    }
+
+    // ========================================
     // ACHAT AUTOMATIQUE SI CRITÈRES REMPLIS
     // ========================================
     
@@ -411,6 +466,12 @@
       if (!provider || !connection) return;
 
       try {
+        const existing = positions.find(p => p.mint === mintAddress);
+        if (existing) {
+          addLog(`⚠️ ${mintAddress.slice(0,8)}... déjà acheté`, 'warning');
+          return;
+        }
+
         const mintPubkey = new solanaWeb3.PublicKey(mintAddress);
         const accounts = await robustCall(() => connection.getTokenLargestAccounts(mintPubkey));
         const holders = accounts.value.length;
@@ -433,12 +494,6 @@
         const priorityFee = parseInt(document.getElementById('priorityFee').value) || 100000;
         const lamports = Math.floor(buyAmountSol * solanaWeb3.LAMPORTS_PER_SOL);
 
-        const programId = new solanaWeb3.PublicKey(PUMP_PROGRAM_ID);
-        const [eventAuthority] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [new TextEncoder().encode('__event_authority')],
-          programId
-        );
-
         const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
           [new TextEncoder().encode('bonding-curve'), mintPubkey.toBuffer()],
           programId
@@ -460,9 +515,6 @@
         const slippagePercent = 10n; // 10% slippage
         const min_token_out = token_out * (100n - slippagePercent) / 100n;
         const max_sol_cost = sol_in * (100n + slippagePercent) / 100n;
-
-        const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-        const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 
         const [bondingAta] = solanaWeb3.PublicKey.findProgramAddressSync(
           [bondingCurve.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()],
@@ -511,6 +563,11 @@
           writeBigUInt64LE(max_sol_cost)
         ]);
 
+        const [eventAuthority] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [new TextEncoder().encode('__event_authority')],
+          programId
+        );
+
         tx.add(new solanaWeb3.TransactionInstruction({
           keys: [
             { pubkey: new solanaWeb3.PublicKey('4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf'), isSigner: false, isWritable: false },
@@ -544,17 +601,208 @@
         stats.bought++;
         updateStats();
 
+        // Enregistrer position
+        let pos = positions.find(p => p.mint === mintAddress);
+        if (pos) {
+          pos.sol_cost += buyAmountSol;
+        } else {
+          positions.push({mint: mintAddress, sol_cost: buyAmountSol});
+        }
+        localStorage.setItem('positions', JSON.stringify(positions));
+        updatePositions();
+        updateBalance();
+
       } catch (err) {
         addLog(`❌ Échec achat: ${err.message}`, 'error');
       }
     }
 
     // ========================================
+    // VENTE
+    // ========================================
+    
+    async function sellToken(mintAddress) {
+      try {
+        addLog(`🛒 Vente ${mintAddress.slice(0,8)}...`, 'info');
+
+        const mintPubkey = new solanaWeb3.PublicKey(mintAddress);
+        const [userAta] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [provider.publicKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()],
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+
+        const balanceInfo = await robustCall(() => connection.getTokenAccountBalance(userAta));
+        const tokenAmount = BigInt(balanceInfo.value.amount);
+
+        if (tokenAmount === 0n) {
+          addLog(`⚠️ Balance zéro`, 'warning');
+          return;
+        }
+
+        const priorityFee = parseInt(document.getElementById('priorityFee').value) || 100000;
+
+        const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [new TextEncoder().encode('bonding-curve'), mintPubkey.toBuffer()],
+          programId
+        );
+
+        const bondingData = await robustCall(() => connection.getAccountInfo(bondingCurve));
+        if (!bondingData) throw new Error('Bonding data not found');
+
+        const data = bondingData.data;
+        const v_token = readBigUInt64LE(data, 8);
+        const v_sol = readBigUInt64LE(data, 16);
+
+        const token_in = tokenAmount;
+        let sol_out = (token_in * v_sol) / (v_token + token_in);
+        if (sol_out === 0n) sol_out = 1n;
+
+        const slippagePercent = 10n;
+        const min_sol_out = sol_out * (100n - slippagePercent) / 100n;
+
+        const [bondingAta] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [bondingCurve.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()],
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+
+        const [eventAuthority] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [new TextEncoder().encode('__event_authority')],
+          programId
+        );
+
+        const tx = new solanaWeb3.Transaction();
+        tx.add(
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFee }),
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
+        );
+
+        const instructionData = concatUint8Arrays([
+          SELL_DISCRIMINATOR,
+          writeBigUInt64LE(token_in),
+          writeBigUInt64LE(min_sol_out)
+        ]);
+
+        tx.add(new solanaWeb3.TransactionInstruction({
+          keys: [
+            { pubkey: new solanaWeb3.PublicKey('4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf'), isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey('CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM'), isSigner: false, isWritable: true },
+            { pubkey: mintPubkey, isSigner: false, isWritable: false },
+            { pubkey: bondingCurve, isSigner: false, isWritable: true },
+            { pubkey: bondingAta, isSigner: false, isWritable: true },
+            { pubkey: userAta, isSigner: false, isWritable: true },
+            { pubkey: provider.publicKey, isSigner: true, isWritable: true },
+            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+            { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+            { pubkey: eventAuthority, isSigner: false, isWritable: false },
+            { pubkey: programId, isSigner: false, isWritable: false }
+          ],
+          programId: programId,
+          data: instructionData
+        }));
+
+        const { blockhash } = await connection.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = provider.publicKey;
+
+        addLog("✍️ Signature vente...", 'info');
+        const signed = await provider.signTransaction(tx);
+        
+        addLog("📤 Envoi vente...", 'info');
+        const sig = await connection.sendRawTransaction(signed.serialize());
+        
+        addLog(`✅ VENTE CONFIRMÉE ! https://solscan.io/tx/${sig}`, 'success');
+
+        // Supprimer position
+        positions = positions.filter(p => p.mint !== mintAddress);
+        localStorage.setItem('positions', JSON.stringify(positions));
+        updatePositions();
+        updateBalance();
+
+      } catch (err) {
+        addLog(`❌ Échec vente: ${err.message}`, 'error');
+      }
+    }
+
+    // ========================================
+    // POSITIONS
+    // ========================================
+    
+    async function updatePositions() {
+      positionsEl.innerHTML = '';
+      let total_pl = 0;
+      const currentPositions = [];
+
+      for (const pos of positions) {
+        const mint = pos.mint;
+        const sol_cost = pos.sol_cost;
+        const mintPubkey = new solanaWeb3.PublicKey(mint);
+        const [userAta] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [provider.publicKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()],
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+
+        let balanceInfo;
+        try {
+          balanceInfo = await robustCall(() => connection.getTokenAccountBalance(userAta));
+        } catch (e) {
+          addLog(`⚠️ Erreur balance ${mint.slice(0,8)}: ${e.message}`, 'warning');
+          continue;
+        }
+
+        const tokenAmount = balanceInfo.value.amount;
+        if (BigInt(tokenAmount) === 0n) continue;
+
+        const est_sol = await getEstimatedSolOut(mint, tokenAmount);
+        const pl = est_sol - sol_cost;
+        total_pl += pl;
+
+        const plColor = pl > 0 ? 'var(--green)' : 'var(--red)';
+
+        const item = document.createElement('div');
+        item.className = 'log-item position-item';
+        item.innerHTML = `
+          <span>\( {mint.slice(0,8)}... \){mint.slice(-4)}</span>
+          <span>${balanceInfo.value.uiAmount.toFixed(2)}</span>
+          <span>Est: ${est_sol.toFixed(4)} SOL</span>
+          <span style="color:\( {plColor}"> \){pl > 0 ? '+' : ''}${pl.toFixed(4)} SOL</span>
+          <button class="btn btn-danger btn-small sell-btn" data-mint="${mint}">Vendre</button>
+        `;
+        positionsEl.appendChild(item);
+
+        currentPositions.push(pos);
+      }
+
+      if (currentPositions.length > 0) {
+        const totalColor = total_pl > 0 ? 'var(--green)' : 'var(--red)';
+        const totalEl = document.createElement('div');
+        totalEl.className = 'log-item';
+        totalEl.innerHTML = `
+          <strong>Total P/L non réalisé:</strong>
+          <span style="color:\( {totalColor}"> \){total_pl > 0 ? '+' : ''}${total_pl.toFixed(4)} SOL</span>
+        `;
+        positionsEl.insertBefore(totalEl, positionsEl.firstChild);
+      }
+
+      positions = currentPositions;
+      localStorage.setItem('positions', JSON.stringify(positions));
+
+      document.querySelectorAll('.sell-btn').forEach(btn => {
+        btn.onclick = async () => {
+          if (btn.disabled) return;
+          btn.disabled = true;
+          await sellToken(btn.dataset.mint);
+          btn.disabled = false;
+        };
+      });
+    }
+
+    refreshPositionsBtn.onclick = updatePositions;
+
+    // ========================================
     // SCANNER AVEC SUBSCRIPTION
     // ========================================
     
-    let subscriptionId = null;
-
     async function startScan() {
       subscriptionId = await robustCall(() => connection.onLogs(
         new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
