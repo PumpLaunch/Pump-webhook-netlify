@@ -226,10 +226,10 @@
     // ========================================
     
     const RPC_ENDPOINTS = [
-      'https://mainnet.helius-rpc.com/?api-key=43caa0a0-33d2-420c-b00a-e7261bfecf78',
       'https://api.mainnet-beta.solana.com',
       'https://solana-api.projectserum.com',
-      'https://rpc.ankr.com/solana'
+      'https://rpc.ankr.com/solana',
+      'https://mainnet.helius-rpc.com/?api-key=YOUR_HELIUS_KEY_HERE' // Remplacez par votre clé Helius
     ];
     
     let currentRpcIndex = 0;
@@ -271,7 +271,7 @@
     let provider = null;
     let connection = null;
     let isScanning = false;
-    let scanInterval = null;
+    let subscriptionId = null;
     let seenTokens = new Set();
     let stats = { scanned: 0, bought: 0 };
     
@@ -336,7 +336,8 @@
       rpcStatusEl.textContent = new URL(rpcUrl).hostname;
       return new solanaWeb3.Connection(rpcUrl, {
         commitment: 'confirmed',
-        confirmTransactionInitialTimeout: 60000
+        confirmTransactionInitialTimeout: 60000,
+        wsEndpoint: rpcUrl.replace('http', 'ws')
       });
     }
 
@@ -351,13 +352,10 @@
         try {
           return await fn();
         } catch (err) {
+          addLog(`⚠️ Erreur RPC: ${err.message}`, 'warning');
           if (i < maxRetries - 1) {
-            if (err.message?.includes('429') || err.message?.includes('fetch')) {
-              switchRPC();
-              await new Promise(r => setTimeout(r, 2000));
-            } else {
-              await new Promise(r => setTimeout(r, 1000));
-            }
+            switchRPC();
+            await new Promise(r => setTimeout(r, 2000));
           } else {
             throw err;
           }
@@ -435,9 +433,15 @@
         const priorityFee = parseInt(document.getElementById('priorityFee').value) || 100000;
         const lamports = Math.floor(buyAmountSol * solanaWeb3.LAMPORTS_PER_SOL);
 
+        const programId = new solanaWeb3.PublicKey(PUMP_PROGRAM_ID);
+        const [eventAuthority] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [new TextEncoder().encode('__event_authority')],
+          programId
+        );
+
         const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
           [new TextEncoder().encode('bonding-curve'), mintPubkey.toBuffer()],
-          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
+          programId
         );
         
         const bondingData = await robustCall(() => connection.getAccountInfo(bondingCurve));
@@ -455,25 +459,19 @@
 
         const slippagePercent = 10n; // 10% slippage
         const min_token_out = token_out * (100n - slippagePercent) / 100n;
-
         const max_sol_cost = sol_in * (100n + slippagePercent) / 100n;
 
+        const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+        const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+
         const [bondingAta] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [
-            bondingCurve.toBuffer(),
-            new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
-            mintPubkey.toBuffer()
-          ],
-          new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+          [bondingCurve.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()],
+          ASSOCIATED_TOKEN_PROGRAM_ID
         );
         
         const [userAta] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [
-            provider.publicKey.toBuffer(),
-            new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
-            mintPubkey.toBuffer()
-          ],
-          new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+          [provider.publicKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()],
+          ASSOCIATED_TOKEN_PROGRAM_ID
         );
 
         const userAtaInfo = await connection.getAccountInfo(userAta);
@@ -493,7 +491,7 @@
               newAccountPubkey: userAta,
               lamports: await connection.getMinimumBalanceForRentExemption(165),
               space: 165,
-              programId: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
+              programId: TOKEN_PROGRAM_ID
             }),
             new solanaWeb3.TransactionInstruction({
               keys: [
@@ -501,7 +499,7 @@
                 { pubkey: mintPubkey, isSigner: false, isWritable: false },
                 { pubkey: provider.publicKey, isSigner: false, isWritable: false }
               ],
-              programId: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+              programId: TOKEN_PROGRAM_ID,
               data: new Uint8Array([1])
             })
           );
@@ -523,10 +521,12 @@
             { pubkey: userAta, isSigner: false, isWritable: true },
             { pubkey: provider.publicKey, isSigner: true, isWritable: true },
             { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'), isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey('SysvarRent111111111111111111111111111111111'), isSigner: false, isWritable: false }
+            { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+            { pubkey: new solanaWeb3.PublicKey('SysvarRent111111111111111111111111111111111'), isSigner: false, isWritable: false },
+            { pubkey: eventAuthority, isSigner: false, isWritable: false },
+            { pubkey: programId, isSigner: false, isWritable: false }
           ],
-          programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
+          programId: programId,
           data: instructionData
         }));
 
@@ -550,50 +550,54 @@
     }
 
     // ========================================
-    // SCANNER
+    // SCANNER AVEC SUBSCRIPTION
     // ========================================
     
-    async function scan() {
-      try {
-        const sigs = await robustCall(() =>
-          connection.getSignaturesForAddress(
-            new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-            { limit: 10 }
-          )
-        );
-        
-        stats.scanned += sigs.length;
-        updateStats();
-        
-        for (const sig of sigs) {
-          if (seenTokens.has(sig.signature)) continue;
-          seenTokens.add(sig.signature);
+    let subscriptionId = null;
+
+    async function startScan() {
+      subscriptionId = await robustCall(() => connection.onLogs(
+        new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
+        async (logs) => {
+          const sig = logs.signature;
+          if (seenTokens.has(sig)) return;
+          seenTokens.add(sig);
+          stats.scanned++;
+          updateStats();
           
-          const tx = await robustCall(() =>
-            connection.getParsedTransaction(sig.signature, { maxSupportedTransactionVersion: 0 })
-          );
-          
-          if (!tx) continue;
-          
-          for (const ix of tx.transaction.message.instructions) {
-            if (ix.programId.toString() === PUMP_PROGRAM_ID && ix.data && ix.data.length >= 8) {
-              const discrim = ix.data.subarray(0, 8);
-              if (discrim.every((v, i) => v === CREATE_DISCRIMINATOR[i])) {
-                const accs = ix.accounts;
-                if (accs && accs.length > 2) {
-                  const mint = accs[2].toString();
-                  if (mint === '11111111111111111111111111111111') continue;
-                  
-                  addLog(`🆕 Token détecté: ${mint.slice(0,8)}...`, 'info');
-                  await autoBuyIfValid(mint); // ← ACHAT AUTO
+          try {
+            const tx = await robustCall(() => connection.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0 }));
+            if (!tx) return;
+            
+            for (const ix of tx.transaction.message.instructions) {
+              if (ix.programId.toString() === PUMP_PROGRAM_ID && ix.data && ix.data.length >= 8) {
+                const discrim = ix.data.subarray(0, 8);
+                if (discrim.every((v, i) => v === CREATE_DISCRIMINATOR[i])) {
+                  const accs = ix.accounts;
+                  if (accs && accs.length > 0) {
+                    const mint = accs[0].toString();
+                    if (mint === '11111111111111111111111111111111') continue;
+                    
+                    addLog(`🆕 Token détecté: ${mint.slice(0,8)}...`, 'info');
+                    await autoBuyIfValid(mint);
+                  }
                 }
               }
             }
+          } catch (err) {
+            addLog(`⚠️ Erreur traitement tx: ${err.message}`, 'warning');
           }
-        }
-        
-      } catch (err) {
-        addLog(`⚠️ Erreur scan`, 'warning');
+        },
+        'confirmed'
+      ));
+      addLog('📡 Subscription active', 'success');
+    }
+
+    function stopScan() {
+      if (subscriptionId !== null) {
+        connection.removeOnLogsListener(subscriptionId);
+        subscriptionId = null;
+        addLog('📡 Subscription arrêtée', 'warning');
       }
     }
 
@@ -601,21 +605,19 @@
     // CONTRÔLES
     // ========================================
     
-    toggleScanBtn.onclick = () => {
+    toggleScanBtn.onclick = async () => {
       if (!isScanning) {
-        const interval = parseInt(document.getElementById('scanInterval').value);
         isScanning = true;
         toggleScanBtn.textContent = "⏸️ Pause";
         toggleScanBtn.className = "btn btn-secondary";
         stopAllBtn.style.display = "block";
         addLog("🚀 START", 'success');
-        scanInterval = setInterval(scan, interval);
-        scan();
+        await startScan();
       } else {
         isScanning = false;
         toggleScanBtn.textContent = "▶️ Start";
         toggleScanBtn.className = "btn btn-primary";
-        if (scanInterval) clearInterval(scanInterval);
+        stopScan();
         addLog("⏸️ Pause", 'warning');
       }
     };
@@ -625,7 +627,7 @@
       toggleScanBtn.textContent = "▶️ Start";
       toggleScanBtn.className = "btn btn-primary";
       stopAllBtn.style.display = "none";
-      if (scanInterval) clearInterval(scanInterval);
+      stopScan();
       seenTokens.clear();
       stats = { scanned: 0, bought: 0 };
       updateStats();
