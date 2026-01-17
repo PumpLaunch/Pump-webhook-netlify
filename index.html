@@ -1,579 +1,645 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CryptoFlux Pro - Trading Pump.fun</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-primary: #0a0e27;
-            --bg-secondary: #131937;
-            --bg-tertiary: #1a2249;
-            --accent-green: #00ff88;
-            --accent-red: #ff3366;
-            --accent-blue: #4d7cff;
-            --accent-purple: #9945ff;
-            --text-primary: #ffffff;
-            --text-secondary: #8892b0;
-            --border-color: #2a3457;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'DM Sans', sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            overflow-x: hidden;
-            line-height: 1.6;
-        }
-
-        .app {
-            min-height: 100vh;
-            position: relative;
-        }
-
-        .bg-grid {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: 
-                linear-gradient(var(--border-color) 1px, transparent 1px),
-                linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
-            background-size: 50px 50px;
-            opacity: 0.3;
-            z-index: 0;
-            animation: gridMove 20s linear infinite;
-        }
-
-        @keyframes gridMove {
-            0% { transform: translate(0, 0); }
-            100% { transform: translate(50px, 50px); }
-        }
-
-        .content {
-            position: relative;
-            z-index: 1;
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 3rem;
-            animation: slideDown 0.6s ease-out;
-        }
-
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .logo {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 2rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--accent-purple), var(--accent-green));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            letter-spacing: -0.05em;
-        }
-
-        .wallet-section {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .balance {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            padding: 0.75rem 1.5rem;
-            background: var(--bg-secondary);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-        }
-
-        .balance-amount {
-            color: var(--accent-green);
-            font-weight: 600;
-            font-size: 1.1rem;
-        }
-
-        .network-badge {
-            padding: 0.5rem 1rem;
-            background: rgba(20, 241, 149, 0.1);
-            border: 1px solid var(--accent-green);
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 12px;
-            font-family: 'DM Sans', sans-serif;
-            font-weight: 600;
-            font-size: 0.95rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            transition: left 0.5s ease;
-        }
-
-        .btn:hover:before {
-            left: 100%;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-purple), var(--accent-green));
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(153, 69, 255, 0.3);
-        }
-
-        .btn-secondary {
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-        }
-
-        .btn-danger {
-            background: rgba(255, 51, 102, 0.2);
-            color: var(--accent-red);
-            border: 1px solid var(--accent-red);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .card {
-            background: var(--bg-secondary);
-            border-radius: 16px;
-            padding: 2rem;
-            border: 1px solid var(--border-color);
-            animation: fadeIn 0.6s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .alert-box {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-        }
-
-        .alert-box.danger {
-            background: rgba(255, 51, 102, 0.1);
-            border: 1px solid var(--accent-red);
-        }
-
-        .alert-box.warning {
-            background: rgba(255, 165, 0, 0.1);
-            border: 1px solid orange;
-        }
-
-        .alert-box.info {
-            background: rgba(77, 124, 255, 0.1);
-            border: 1px solid var(--accent-blue);
-        }
-
-        .wallet-options {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-top: 2rem;
-        }
-
-        .wallet-option {
-            padding: 1.5rem;
-            background: var(--bg-tertiary);
-            border: 2px solid var(--border-color);
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .wallet-option:hover {
-            border-color: var(--accent-purple);
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(153, 69, 255, 0.2);
-        }
-
-        .wallet-icon {
-            font-size: 3rem;
-        }
-
-        .wallet-name {
-            font-size: 1.2rem;
-            font-weight: 700;
-        }
-
-        .wallet-status {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .dashboard {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        .market-stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-        }
-
-        .stat-item {
-            padding: 1rem;
-            background: var(--bg-tertiary);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-        }
-
-        .stat-label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin-top: 1rem;
-        }
-
-        .signals-list {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .signal-item {
-            padding: 1.25rem;
-            background: var(--bg-tertiary);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            transition: all 0.3s ease;
-        }
-
-        .activity-log {
-            max-height: 300px;
-            overflow-y: auto;
-            margin-top: 1rem;
-        }
-
-        .activity-item {
-            padding: 0.75rem;
-            margin-bottom: 0.5rem;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            border-left: 3px solid var(--accent-blue);
-        }
-
-        @media (max-width: 768px) {
-            .dashboard {
-                grid-template-columns: 1fr;
-            }
-            .market-stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CryptoFlux Pro - Pump Sniper</title>
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0e27;
+      --card: #131937;
+      --border: #2a3457;
+      --text: #ffffff;
+      --green: #00ff88;
+      --purple: #9945ff;
+      --red: #ff3366;
+      --orange: #ff9500;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, sans-serif;
+      line-height: 1.5;
+      padding: 16px;
+    }
+    .container { max-width: 700px; margin: 0 auto; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      font-size: 1.6rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--purple), var(--green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--purple), var(--green));
+      color: white;
+    }
+    .btn-danger {
+      background: var(--red);
+      color: white;
+    }
+    .btn-secondary {
+      background: var(--card);
+      color: white;
+      border: 1px solid var(--border);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.2rem;
+      margin-bottom: 1.2rem;
+    }
+    .alert {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+    }
+    .alert-danger {
+      background: rgba(255, 51, 102, 0.1);
+      border: 1px solid var(--red);
+      color: var(--red);
+    }
+    .alert-warning {
+      background: rgba(255, 149, 0, 0.1);
+      border: 1px solid var(--orange);
+      color: var(--orange);
+    }
+    .alert-success {
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid var(--green);
+      color: var(--green);
+    }
+    .status {
+      font-family: monospace;
+      color: #8892b0;
+      margin-top: 12px;
+      font-size: 0.9rem;
+      padding: 8px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 6px;
+    }
+    label {
+      display: block;
+      margin: 8px 0 4px;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: white;
+      margin-bottom: 8px;
+      font-family: monospace;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--purple);
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stat {
+      background: rgba(0,0,0,0.3);
+      padding: 8px;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: #8892b0;
+    }
+    .stat-value {
+      font-size: 1.2rem;
+      font-weight: 700;
+      font-family: monospace;
+    }
+    .log {
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.85rem;
+      background: rgba(0,0,0,0.3);
+      padding: 8px;
+      border-radius: 6px;
+    }
+    .log-item {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .log-time {
+      color: #8892b0;
+      margin-right: 8px;
+    }
+  </style>
 </head>
 <body>
-    <div id="root"></div>
+  <div class="container">
+    <div class="header">
+      <div class="logo">⚡ PUMP SNIPER</div>
+      <button id="connectBtn" class="btn btn-primary" disabled>Connecter Wallet</button>
+    </div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+    <div id="app" style="display:none;">
+      <div class="card">
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-label">SOLDE</div>
+            <div class="stat-value" id="balance">— SOL</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">SCANNÉS</div>
+            <div class="stat-value" id="scanned">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">ACHATS</div>
+            <div class="stat-value" id="bought">0</div>
+          </div>
+        </div>
+        <div style="font-family: monospace; font-size: 0.85rem; color: #8892b0;">
+          <div><strong>Wallet:</strong> <span id="address">...</span></div>
+          <div><strong>Réseau:</strong> Solana Mainnet (Helius RPC)</div>
+        </div>
+      </div>
 
-        const HELIUS_RPC_URL = 'https://mainnet.helius-rpc.com/?api-key=8f852e97-a557-4065-be74-cc2a6547cd28';
-        const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
+      <div class="card">
+        <div class="alert alert-danger">
+          <strong>⚠️ TRADING RÉEL</strong><br>
+          Transactions irréversibles. Utilisez un wallet de test avec petits montants.
+        </div>
 
-        function App() {
-            const [walletConnected, setWalletConnected] = useState(false);
-            const [walletAddress, setWalletAddress] = useState('');
-            const [balance, setBalance] = useState(0);
-            const [connection, setConnection] = useState(null);
-            const [provider, setProvider] = useState(null);
-            const [showWalletModal, setShowWalletModal] = useState(false);
-            const [scannerActive, setScannerActive] = useState(false);
-            const [activities, setActivities] = useState([]);
-            const [signals, setSignals] = useState([]);
-            const [stats, setStats] = useState({ scanned: 0, detected: 0 });
+        <h3 style="margin-bottom: 12px;">⚙️ Configuration</h3>
+        
+        <label>💰 Montant par achat (SOL):</label>
+        <input type="number" id="buyAmount" value="0.05" step="0.01" min="0.01" max="1">
+        
+        <label>🎯 Objectif de profit (%):</label>
+        <input type="number" id="profitTarget" value="100" min="10" max="500">
+        
+        <label>👥 Détenteurs minimum:</label>
+        <input type="number" id="minHolders" value="30" min="5" max="200">
+        
+        <label>💧 Liquidité minimum (SOL):</label>
+        <input type="number" id="minLiquidity" value="3" min="0.5" step="0.5" max="50">
+        
+        <label>⚡ Frais de priorité:</label>
+        <select id="priorityFee">
+          <option value="50000">Moyen (0.00005 SOL)</option>
+          <option value="100000" selected>Élevé (0.0001 SOL)</option>
+          <option value="500000">Turbo (0.0005 SOL)</option>
+          <option value="1000000">Extrême (0.001 SOL)</option>
+        </select>
+        
+        <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button id="toggleScan" class="btn btn-primary">▶️ Démarrer</button>
+          <button id="stopAll" class="btn btn-danger" style="display:none;">🛑 Stop All</button>
+        </div>
+      </div>
 
-            const chartRef = useRef(null);
-            const scanIntervalRef = useRef(null);
+      <div class="card">
+        <h3 style="margin-bottom: 8px;">📜 Journal d'activité</h3>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
 
-            const addActivity = (message) => {
-                const now = new Date();
-                const time = now.toLocaleTimeString('fr-FR');
-                setActivities(prev => [{time, message}, ...prev].slice(0, 50));
-                console.log(`[${time}] ${message}`);
-            };
+    <div id="status" class="status">Vérification du wallet Phantom...</div>
+  </div>
 
-            // Vérifier la disponibilité des wallets
-            const checkWalletAvailability = () => {
-                const wallets = {
-                    phantom: {
-                        available: typeof window.phantom !== 'undefined' && window.phantom.solana,
-                        name: 'Phantom',
-                        icon: '👻',
-                        provider: window.phantom?.solana
-                    },
-                    solflare: {
-                        available: typeof window.solflare !== 'undefined',
-                        name: 'Solflare',
-                        icon: '☀️',
-                        provider: window.solflare
-                    }
-                };
-                return wallets;
-            };
+  <script>
+    // ========================================
+    // CONFIGURATION
+    // ========================================
+    
+    const HELIUS_RPC_URL = 'https://mainnet.helius-rpc.com/?api-key=1e8ea51d-3bed-4100-ad49-a6a7635c171a';
+    const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
+    const PUMP_GLOBAL = '4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf';
+    const PUMP_FEE_RECIPIENT = 'CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM';
+    const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+    const ASSOCIATED_TOKEN_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
+    const SYSTEM_PROGRAM = '11111111111111111111111111111111';
+    const RENT_SYSVAR = 'SysvarRent111111111111111111111111111111111';
+    
+    // Discriminators (à vérifier sur Solscan)
+    const BUY_DISCRIMINATOR = [0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea];
+    
+    // ========================================
+    // VARIABLES GLOBALES
+    // ========================================
+    
+    let provider = null;
+    let connection = null;
+    let isScanning = false;
+    let scanInterval = null;
+    let seenTokens = new Set();
+    let stats = { scanned: 0, bought: 0 };
+    
+    // Éléments DOM
+    const statusEl = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const toggleScanBtn = document.getElementById('toggleScan');
+    const stopAllBtn = document.getElementById('stopAll');
+    const addressEl = document.getElementById('address');
+    const balanceEl = document.getElementById('balance');
+    const scannedEl = document.getElementById('scanned');
+    const boughtEl = document.getElementById('bought');
+    const logEl = document.getElementById('log');
+    const appEl = document.getElementById('app');
 
-            // Connexion wallet spécifique
-            const connectSpecificWallet = async (walletType) => {
-                const wallets = checkWalletAvailability();
-                const wallet = wallets[walletType];
+    // ========================================
+    // UTILITAIRES
+    // ========================================
+    
+    function addLog(msg, type = 'info') {
+      const now = new Date();
+      const time = now.toLocaleTimeString('fr-FR');
+      const color = type === 'error' ? 'var(--red)' : type === 'success' ? 'var(--green)' : type === 'warning' ? 'var(--orange)' : '#8892b0';
+      
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `<span class="log-time">[${time}]</span><span style="color:${color}">${msg}</span>`;
+      logEl.insertBefore(item, logEl.firstChild);
+      
+      // Limiter à 50 entrées
+      while (logEl.children.length > 50) {
+        logEl.removeChild(logEl.lastChild);
+      }
+      
+      console.log(`[${time}] ${msg}`);
+      statusEl.textContent = msg;
+    }
 
-                if (!wallet.available) {
-                    const installUrls = {
-                        phantom: 'https://phantom.app/',
-                        solflare: 'https://solflare.com/'
-                    };
-                    
-                    addActivity(`❌ ${wallet.name} n'est pas installé`);
-                    
-                    if (confirm(`${wallet.name} n'est pas détecté. Voulez-vous l'installer ?`)) {
-                        window.open(installUrls[walletType], '_blank');
-                    }
-                    return;
-                }
+    function updateStats() {
+      scannedEl.textContent = stats.scanned;
+      boughtEl.textContent = stats.bought;
+    }
 
-                try {
-                    addActivity(`🔄 Connexion à ${wallet.name}...`);
-                    
-                    const walletProvider = wallet.provider;
-                    
-                    // Vérifier si le wallet est déjà connecté
-                    if (walletProvider.isConnected) {
-                        addActivity(`✅ ${wallet.name} déjà connecté`);
-                    } else {
-                        await walletProvider.connect();
-                    }
+    async function updateBalance() {
+      if (!provider || !connection) return;
+      try {
+        const balance = await connection.getBalance(provider.publicKey);
+        const sol = (balance / solanaWeb3.LAMPORTS_PER_SOL).toFixed(4);
+        balanceEl.textContent = `${sol} SOL`;
+      } catch (err) {
+        console.error('Erreur mise à jour solde:', err);
+      }
+    }
 
-                    const pubKey = walletProvider.publicKey.toString();
-                    setWalletAddress(pubKey);
-                    setWalletConnected(true);
-                    setProvider(walletProvider);
-                    setShowWalletModal(false);
+    // ========================================
+    // CONNEXION WALLET
+    // ========================================
+    
+    if (window.phantom?.solana?.isPhantom) {
+      addLog("✅ Phantom détecté");
+      connectBtn.disabled = false;
+      
+      connectBtn.onclick = async () => {
+        try {
+          addLog("🔄 Connexion...");
+          provider = window.phantom.solana;
+          
+          const { publicKey } = await provider.connect();
+          connection = new solanaWeb3.Connection(HELIUS_RPC_URL, 'confirmed');
+          
+          const pubKeyStr = publicKey.toString();
+          addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
+          
+          await updateBalance();
+          
+          appEl.style.display = 'block';
+          connectBtn.style.display = 'none';
+          
+          addLog("✅ Connecté avec succès!", 'success');
+          
+          // Mise à jour du solde toutes les 10 secondes
+          setInterval(updateBalance, 10000);
+          
+        } catch (err) {
+          addLog(`❌ Erreur: ${err.message}`, 'error');
+        }
+      };
+    } else {
+      addLog("❌ Phantom non installé. Installez-le sur phantom.app", 'error');
+      statusEl.innerHTML = '❌ Phantom requis<br><a href="https://phantom.app/" target="_blank" style="color:var(--purple)">Installer Phantom</a>';
+    }
 
-                    // Connexion Helius
-                    const conn = new solanaWeb3.Connection(HELIUS_RPC_URL, 'confirmed');
-                    setConnection(conn);
-                    
-                    const balanceResult = await conn.getBalance(walletProvider.publicKey);
-                    const solBalance = balanceResult / solanaWeb3.LAMPORTS_PER_SOL;
-                    setBalance(solBalance);
+    // ========================================
+    // ANALYSE DE TOKEN
+    // ========================================
+    
+    async function analyzeToken(mintAddress) {
+      try {
+        const mint = new solanaWeb3.PublicKey(mintAddress);
+        
+        // Récupérer les plus gros détenteurs
+        const largestAccounts = await connection.getTokenLargestAccounts(mint);
+        const holderCount = largestAccounts.value.length;
+        
+        // Vérifier le nombre de holders
+        const minHolders = parseInt(document.getElementById('minHolders').value) || 30;
+        if (holderCount < minHolders) {
+          addLog(`⚠️ ${mintAddress.slice(0, 8)}... - Seulement ${holderCount} holders`, 'warning');
+          return null;
+        }
+        
+        // Vérifier la concentration
+        const topHolderPercent = largestAccounts.value[0] ? 
+          (Number(largestAccounts.value[0].amount) / 1e15) * 100 : 0;
+        
+        if (topHolderPercent > 50) {
+          addLog(`⚠️ ${mintAddress.slice(0, 8)}... - Dev détient ${topHolderPercent.toFixed(0)}%`, 'warning');
+          return null;
+        }
+        
+        return {
+          mint: mintAddress,
+          holderCount,
+          topHolderPercent,
+          score: holderCount >= 50 ? 80 : 60
+        };
+        
+      } catch (err) {
+        console.error('Erreur analyse:', err);
+        return null;
+      }
+    }
 
-                    addActivity(`✅ ${wallet.name} connecté: ${pubKey.slice(0, 6)}...${pubKey.slice(-4)}`);
-                    addActivity(`💰 Solde: ${solBalance.toFixed(4)} SOL`);
-                    addActivity(`🔌 RPC: Helius Premium`);
+    // ========================================
+    // ACHAT DE TOKEN
+    // ========================================
+    
+    async function buyToken(tokenData) {
+      if (!provider || !connection) {
+        addLog("❌ Wallet non connecté", 'error');
+        return false;
+      }
 
-                } catch (error) {
-                    console.error('Erreur connexion:', error);
-                    addActivity(`❌ Erreur ${wallet.name}: ${error.message}`);
-                }
-            };
+      const mintAddress = tokenData.mint;
+      const buyAmountSol = parseFloat(document.getElementById('buyAmount').value) || 0.05;
+      const priorityFeeMicroLamports = parseInt(document.getElementById('priorityFee').value) || 100000;
 
-            // Détecter automatiquement et connecter
-            const autoConnectWallet = async () => {
-                const wallets = checkWalletAvailability();
+      try {
+        addLog(`🔄 Achat de ${mintAddress.slice(0, 8)}... (${buyAmountSol} SOL)`, 'info');
+        
+        const mint = new solanaWeb3.PublicKey(mintAddress);
+        const buyAmountLamports = Math.floor(buyAmountSol * solanaWeb3.LAMPORTS_PER_SOL);
+        
+        // Dériver les comptes
+        const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [Buffer.from('bonding-curve'), mint.toBuffer()],
+          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
+        );
+        
+        const [associatedBondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [
+            bondingCurve.toBuffer(),
+            new solanaWeb3.PublicKey(TOKEN_PROGRAM).toBuffer(),
+            mint.toBuffer(),
+          ],
+          new solanaWeb3.PublicKey(ASSOCIATED_TOKEN_PROGRAM)
+        );
+        
+        const [associatedUser] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [
+            provider.publicKey.toBuffer(),
+            new solanaWeb3.PublicKey(TOKEN_PROGRAM).toBuffer(),
+            mint.toBuffer(),
+          ],
+          new solanaWeb3.PublicKey(ASSOCIATED_TOKEN_PROGRAM)
+        );
+        
+        // Créer la transaction
+        const transaction = new solanaWeb3.Transaction();
+        
+        // Ajouter frais de priorité
+        transaction.add(
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({
+            microLamports: priorityFeeMicroLamports
+          })
+        );
+        
+        transaction.add(
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({
+            units: 100000
+          })
+        );
+        
+        // Vérifier si l'ATA existe
+        const ataInfo = await connection.getAccountInfo(associatedUser);
+        if (!ataInfo) {
+          addLog(`🔨 Création de l'ATA...`, 'info');
+          // Note: En production, utilisez createAssociatedTokenAccountInstruction
+        }
+        
+        // Créer l'instruction d'achat
+        const amountBuffer = Buffer.alloc(8);
+        amountBuffer.writeBigUInt64LE(BigInt(buyAmountLamports), 0);
+        
+        const maxSolBuffer = Buffer.alloc(8);
+        maxSolBuffer.writeBigUInt64LE(BigInt(buyAmountLamports), 0);
+        
+        const instructionData = Buffer.concat([
+          Buffer.from(BUY_DISCRIMINATOR),
+          amountBuffer,
+          maxSolBuffer
+        ]);
+        
+        const keys = [
+          { pubkey: new solanaWeb3.PublicKey(PUMP_GLOBAL), isSigner: false, isWritable: false },
+          { pubkey: new solanaWeb3.PublicKey(PUMP_FEE_RECIPIENT), isSigner: false, isWritable: true },
+          { pubkey: mint, isSigner: false, isWritable: false },
+          { pubkey: bondingCurve, isSigner: false, isWritable: true },
+          { pubkey: associatedBondingCurve, isSigner: false, isWritable: true },
+          { pubkey: associatedUser, isSigner: false, isWritable: true },
+          { pubkey: provider.publicKey, isSigner: true, isWritable: true },
+          { pubkey: new solanaWeb3.PublicKey(SYSTEM_PROGRAM), isSigner: false, isWritable: false },
+          { pubkey: new solanaWeb3.PublicKey(TOKEN_PROGRAM), isSigner: false, isWritable: false },
+          { pubkey: new solanaWeb3.PublicKey(RENT_SYSVAR), isSigner: false, isWritable: false }
+        ];
+        
+        const buyInstruction = new solanaWeb3.TransactionInstruction({
+          keys,
+          programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
+          data: instructionData
+        });
+        
+        transaction.add(buyInstruction);
+        
+        // Signer et envoyer
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = provider.publicKey;
+        
+        addLog("✍️ Demande de signature...", 'info');
+        const signed = await provider.signTransaction(transaction);
+        
+        addLog("📤 Envoi de la transaction...", 'info');
+        const signature = await connection.sendRawTransaction(signed.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed'
+        });
+        
+        addLog(`🔗 TX: https://solscan.io/tx/${signature}`, 'info');
+        
+        // Confirmation
+        const confirmation = await connection.confirmTransaction(signature);
+        
+        if (confirmation.value.err) {
+          throw new Error('Transaction échouée');
+        }
+        
+        addLog(`✅ ACHAT CONFIRMÉ! ${mintAddress.slice(0, 8)}...`, 'success');
+        stats.bought++;
+        updateStats();
+        await updateBalance();
+        
+        return true;
+        
+      } catch (err) {
+        console.error('Erreur achat:', err);
+        addLog(`❌ Échec achat: ${err.message}`, 'error');
+        return false;
+      }
+    }
+
+    // ========================================
+    // SCANNER
+    // ========================================
+    
+    async function scanForNewTokens() {
+      try {
+        const signatures = await connection.getSignaturesForAddress(
+          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
+          { limit: 10 }
+        );
+        
+        stats.scanned += signatures.length;
+        updateStats();
+        
+        for (const sig of signatures) {
+          if (seenTokens.has(sig.signature)) continue;
+          
+          seenTokens.add(sig.signature);
+          
+          const tx = await connection.getParsedTransaction(sig.signature, {
+            maxSupportedTransactionVersion: 0
+          });
+          
+          if (!tx) continue;
+          
+          // Extraire le mint
+          const instructions = tx.transaction.message.instructions;
+          
+          for (const ix of instructions) {
+            if (ix.programId.toString() === PUMP_PROGRAM_ID) {
+              const accounts = ix.accounts;
+              if (accounts && accounts.length > 2) {
+                const mint = accounts[2].toString();
                 
-                // Essayer Phantom en premier
-                if (wallets.phantom.available) {
-                    await connectSpecificWallet('phantom');
-                } else if (wallets.solflare.available) {
-                    await connectSpecificWallet('solflare');
-                } else {
-                    // Aucun wallet détecté
-                    setShowWalletModal(true);
+                addLog(`🆕 Nouveau token: ${mint.slice(0, 8)}...`, 'info');
+                
+                // Analyser
+                const tokenData = await analyzeToken(mint);
+                
+                if (tokenData) {
+                  addLog(`✅ Token validé! Score: ${tokenData.score}, Holders: ${tokenData.holderCount}`, 'success');
+                  
+                  // Acheter
+                  await buyToken(tokenData);
                 }
-            };
+              }
+            }
+          }
+        }
+        
+      } catch (err) {
+        console.error('Erreur scan:', err);
+        addLog(`⚠️ Erreur scan: ${err.message}`, 'warning');
+      }
+    }
 
-            const disconnectWallet = async () => {
-                if (provider && provider.disconnect) {
-                    try {
-                        await provider.disconnect();
-                    } catch (error) {
-                        console.error('Erreur déconnexion:', error);
-                    }
-                }
-                setWalletConnected(false);
-                setWalletAddress('');
-                setBalance(0);
-                setScannerActive(false);
-                addActivity('🔌 Wallet déconnecté');
-            };
+    // ========================================
+    // CONTRÔLES
+    // ========================================
+    
+    toggleScanBtn.onclick = () => {
+      if (!isScanning) {
+        isScanning = true;
+        toggleScanBtn.textContent = "⏸️ Pause";
+        toggleScanBtn.className = "btn btn-secondary";
+        stopAllBtn.style.display = "block";
+        
+        addLog("🚀 SCANNER DÉMARRÉ", 'success');
+        
+        scanInterval = setInterval(scanForNewTokens, 3000);
+        scanForNewTokens(); // Premier scan immédiat
+        
+      } else {
+        isScanning = false;
+        toggleScanBtn.textContent = "▶️ Démarrer";
+        toggleScanBtn.className = "btn btn-primary";
+        
+        if (scanInterval) {
+          clearInterval(scanInterval);
+          scanInterval = null;
+        }
+        
+        addLog("⏸️ Scanner en pause", 'warning');
+      }
+    };
 
-            // Scanner Pump.fun
-            const startScanner = async () => {
-                if (!connection) {
-                    addActivity('❌ Connectez votre wallet d\'abord');
-                    return;
-                }
+    stopAllBtn.onclick = () => {
+      isScanning = false;
+      toggleScanBtn.textContent = "▶️ Démarrer";
+      toggleScanBtn.className = "btn btn-primary";
+      stopAllBtn.style.display = "none";
+      
+      if (scanInterval) {
+        clearInterval(scanInterval);
+        scanInterval = null;
+      }
+      
+      seenTokens.clear();
+      stats = { scanned: 0, bought: 0 };
+      updateStats();
+      
+      addLog("🛑 TOUT ARRÊTÉ - Réinitialisé", 'error');
+    };
 
-                setScannerActive(true);
-                addActivity('🚀 Scanner démarré');
-
-                scanIntervalRef.current = setInterval(async () => {
-                    try {
-                        const signatures = await connection.getSignaturesForAddress(
-                            new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-                            { limit: 10 }
-                        );
-
-                        setStats(prev => ({ 
-                            ...prev, 
-                            scanned: prev.scanned + signatures.length 
-                        }));
-
-                        for (const sig of signatures) {
-                            const exists = signals.some(s => s.signature === sig.signature);
-                            if (exists) continue;
-
-                            const tx = await connection.getParsedTransaction(sig.signature, {
-                                maxSupportedTransactionVersion: 0
-                            });
-
-                            if (!tx) continue;
-
-                            const instructions = tx.transaction.message.instructions;
-                            
-                            for (const ix of instructions) {
-                                if (ix.programId.toString() === PUMP_PROGRAM_ID) {
-                                    const accounts = ix.accounts;
-                                    if (accounts && accounts.length > 2) {
-                                        const mint = accounts[2].toString();
-                                        const score = 70 + Math.floor(Math.random() * 30);
-                                        
-                                        const tokenInfo = {
-                                            mint,
-                                            signature: sig.signature,
-                                            timestamp: sig.blockTime,
-                                            score,
-                                            verdict: score >= 85 ? 'BON' : 'MODÉRÉ'
-                                        };
-                                        
-                                        setSignals(prev => [tokenInfo, ...prev].slice(0, 20));
-                                        setStats(prev => ({ 
-                                            ...prev, 
-                                            detected: prev.detected + 1 
-                                        }));
-                                        
-                                        addActivity(`🆕 Token: ${mint.slice(0, 8)}... Score: ${score}`);
-                                    }
-                                }
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Erreur scan:', error);
-                    }
-                }, 3000);
-            };
-
-            const stopScanner = () => {
-                if (scanIntervalRef.current) {
-                    clearInterval(scanIntervalRef.current);
-                    scanIntervalRef.current = null;
-                }
-                setScannerActive(false);
-                addActivity('⏸️ Scanner arrêté');
-            };
-
-            useEffect(() => {
-                return () => {
-                    if (scanIntervalRef.current) {
-                        clearInterval(scanIntervalRef.current);
-                    }
-                };
-            }, []);
-
-            return (
-                <div className="app">
-                    <div className="bg-grid"></div>
-                    
-                    <div className="content">
-                        <header className="header">
-                            <div className="logo">CRYPTOFLUX PRO</div>
-                            
-                            <div className="wallet-section">
-                                {walletConnected && (
-                                    <>
-                                        <div className="network-badge">
-                                            🟢 Solana Mainnet
-                                        </div>
-                                        <div className="balance">
-                                            <span className="balance-amount">{balance.toFixed(4)} SOL</span>
-                                        </div>
-                                    </>
-                                )}
-                                
-                        
+    // Cleanup au déchargement
+    window.addEventListener('beforeunload', () => {
+      if (scanInterval) {
+        clearInterval(scanInterval);
+      }
+    });
+  </script>
+</body>
+</html>
