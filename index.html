@@ -3,607 +3,90 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Pump Sniper Pro</title>
+  <title>Phantom Connect</title>
   <!-- ✅ Librairie Solana sans espace -->
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   <style>
-    :root {
-      --bg: #0a0e27;
-      --card: #131937;
-      --border: #2a3457;
-      --text: #ffffff;
-      --green: #00ff88;
-      --purple: #9945ff;
-      --red: #ff3366;
-      --orange: #ff9500;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, sans-serif;
-      line-height: 1.5;
-      padding: 16px;
-    }
-    .container { max-width: 700px; margin: 0 auto; }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .logo {
-      font-size: 1.6rem;
-      font-weight: 800;
-      background: linear-gradient(135deg, var(--purple), var(--green));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      background: #0f0f23;
+      color: white;
+      font-family: sans-serif;
+      padding: 20px;
+      text-align: center;
     }
     .btn {
-      padding: 10px 20px;
+      background: #9945ff;
+      color: white;
       border: none;
+      padding: 12px 24px;
+      margin: 20px 0;
       border-radius: 12px;
-      font-weight: 600;
+      font-size: 16px;
       cursor: pointer;
-      transition: all 0.3s;
-    }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-primary {
-      background: linear-gradient(135deg, var(--purple), var(--green));
-      color: white;
-    }
-    .btn-danger { background: var(--red); color: white; }
-    .btn-secondary {
-      background: var(--card);
-      color: white;
-      border: 1px solid var(--border);
     }
     .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 1.2rem;
-      margin-bottom: 1.2rem;
+      background: #1a1a3a;
+      padding: 20px;
+      border-radius: 12px;
+      margin: 20px 0;
     }
-    .alert {
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      font-size: 0.9rem;
-    }
-    .alert-danger {
-      background: rgba(255, 51, 102, 0.1);
-      border: 1px solid var(--red);
-      color: var(--red);
-    }
-    .alert-success {
-      background: rgba(0, 255, 136, 0.1);
-      border: 1px solid var(--green);
-      color: var(--green);
-    }
-    .status {
+    #status {
       font-family: monospace;
       color: #8892b0;
       margin-top: 12px;
-      font-size: 0.9rem;
-      padding: 8px;
-      background: rgba(0,0,0,0.3);
-      border-radius: 6px;
     }
-    label {
-      display: block;
-      margin: 8px 0 4px;
-      font-weight: 500;
-      font-size: 0.9rem;
-    }
-    input, select {
-      width: 100%;
-      padding: 8px;
-      background: rgba(0,0,0,0.3);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: white;
-      margin-bottom: 8px;
-      font-family: monospace;
-    }
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .stat {
-      background: rgba(0,0,0,0.3);
-      padding: 8px;
-      border-radius: 6px;
-      text-align: center;
-    }
-    .stat-label { font-size: 0.75rem; color: #8892b0; }
-    .stat-value {
-      font-size: 1.2rem;
-      font-weight: 700;
-      font-family: monospace;
-    }
-    .log {
-      max-height: 250px;
-      overflow-y: auto;
-      font-family: monospace;
-      font-size: 0.85rem;
-      background: rgba(0,0,0,0.3);
-      padding: 8px;
-      border-radius: 6px;
-    }
-    .log-item {
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-    .log-time { color: #8892b0; margin-right: 8px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="logo">⚡ PUMP SNIPER</div>
-      <button id="connectBtn" class="btn btn-primary" disabled>Connecter</button>
+  <h2>🔌 Test de connexion Phantom</h2>
+  
+  <button id="connectBtn" class="btn">Connecter Wallet</button>
+  
+  <div id="result" style="display:none;">
+    <div class="card">
+      <p>✅ Connecté !</p>
+      <p><strong>Adresse :</strong></p>
+      <p id="address">...</p>
     </div>
-
-    <div id="app" style="display:none;">
-      <div class="card">
-        <div class="alert alert-success">
-          <strong>✅ ACHAT AUTO</strong><br>
-          Achète si: ≥20 holders, dev ≤50%
-        </div>
-        
-        <div class="stats">
-          <div class="stat">
-            <div class="stat-label">SOLDE</div>
-            <div class="stat-value" id="balance">—</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">SCANNÉS</div>
-            <div class="stat-value" id="scanned">0</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">ACHATS</div>
-            <div class="stat-value" id="bought">0</div>
-          </div>
-        </div>
-        
-        <div style="font-family: monospace; font-size: 0.85rem; color: #8892b0;">
-          <div><strong>Wallet:</strong> <span id="address">...</span></div>
-          <div><strong>RPC:</strong> <span id="rpcStatus">Chargement...</span></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="alert alert-danger">
-          <strong>⚠️ TRADING RÉEL MAINNET</strong><br>
-          Montant minimum: 0.005 SOL
-        </div>
-
-        <h3 style="margin-bottom: 12px;">⚙️ Configuration</h3>
-        
-        <label>💰 Montant (SOL):</label>
-        <input type="number" id="buyAmount" value="0.005" step="0.001" min="0.005" max="1">
-        
-        <label>👥 Holders min:</label>
-        <input type="number" id="minHolders" value="20" min="5" max="100">
-        
-        <label>⏱️ Scan (secondes):</label>
-        <select id="scanInterval">
-          <option value="15000" selected>15s</option>
-          <option value="20000">20s</option>
-          <option value="30000">30s</option>
-        </select>
-        
-        <label>⚡ Frais priorité:</label>
-        <select id="priorityFee">
-          <option value="100000" selected>Élevé</option>
-          <option value="500000">Turbo</option>
-          <option value="1000000">Max</option>
-        </select>
-        
-        <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-          <button id="toggleScan" class="btn btn-primary">▶️ Start</button>
-          <button id="stopAll" class="btn btn-danger" style="display:none;">🛑 Stop</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3 style="margin-bottom: 8px;">📜 Activité</h3>
-        <div id="log" class="log"></div>
-      </div>
-    </div>
-
-    <div id="status" class="status">Démarrage...</div>
   </div>
 
+  <div id="status">Cliquez sur "Connecter Wallet"</div>
+
   <script>
-    // ========================================
-    // CONFIGURATION
-    // ========================================
-    
-    const RPC_ENDPOINTS = [
-      'https://mainnet.helius-rpc.com/?api-key=43caa0a0-33d2-420c-b00a-e7261bfecf78',
-      'https://api.mainnet-beta.solana.com',
-      'https://solana-api.projectserum.com',
-      'https://rpc.ankr.com/solana'
-    ];
-    
-    let currentRpcIndex = 0;
-    const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
-    const BUY_DISCRIMINATOR = new Uint8Array([0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea]);
-    
-    // ========================================
-    // UTILITAIRES SANS BUFFER
-    // ========================================
-    
-    function writeBigUInt64LE(value) {
-      const buffer = new ArrayBuffer(8);
-      const view = new DataView(buffer);
-      view.setBigUint64(0, BigInt(value), true);
-      return new Uint8Array(buffer);
-    }
-
-    function concatUint8Arrays(arrays) {
-      const totalLength = arrays.reduce((acc, arr) => acc + arr.length, 0);
-      const result = new Uint8Array(totalLength);
-      let offset = 0;
-      for (const arr of arrays) {
-        result.set(arr, offset);
-        offset += arr.length;
-      }
-      return result;
-    }
-
-    // ========================================
-    // VARIABLES
-    // ========================================
-    
-    let provider = null;
-    let connection = null;
-    let isScanning = false;
-    let scanInterval = null;
-    let seenTokens = new Set();
-    let stats = { scanned: 0, bought: 0 };
-    
     const statusEl = document.getElementById('status');
     const connectBtn = document.getElementById('connectBtn');
-    const toggleScanBtn = document.getElementById('toggleScan');
-    const stopAllBtn = document.getElementById('stopAll');
+    const resultEl = document.getElementById('result');
     const addressEl = document.getElementById('address');
-    const balanceEl = document.getElementById('balance');
-    const scannedEl = document.getElementById('scanned');
-    const boughtEl = document.getElementById('bought');
-    const logEl = document.getElementById('log');
-    const appEl = document.getElementById('app');
-    const rpcStatusEl = document.getElementById('rpcStatus');
 
-    // ========================================
-    // UTILITAIRES
-    // ========================================
-    
-    function addLog(msg, type = 'info') {
-      const now = new Date();
-      const time = now.toLocaleTimeString('fr-FR');
-      const color = type === 'error' ? 'var(--red)' : 
-                    type === 'success' ? 'var(--green)' : 
-                    type === 'warning' ? 'var(--orange)' : '#8892b0';
-      
-      const item = document.createElement('div');
-      item.className = 'log-item';
-      item.innerHTML = `<span class="log-time">[${time}]</span><span style="color:${color}">${msg}</span>`;
-      logEl.insertBefore(item, logEl.firstChild);
-      
-      while (logEl.children.length > 50) {
-        logEl.removeChild(logEl.lastChild);
+    // ✅ Connexion au clic avec l'API standard
+    connectBtn.onclick = async () => {
+      // Vérifie que Phantom est installé
+      if (!window.solana || !window.solana.isPhantom) {
+        statusEl.textContent = "❌ Ouvrez cette page dans l'app Phantom → Browser";
+        return;
       }
-      
-      console.log(`[${time}] ${msg}`);
-      statusEl.textContent = msg;
-    }
-
-    function updateStats() {
-      scannedEl.textContent = stats.scanned;
-      boughtEl.textContent = stats.bought;
-    }
-
-    async function updateBalance() {
-      if (!provider || !connection) return;
-      try {
-        const balance = await connection.getBalance(provider.publicKey);
-        balanceEl.textContent = (balance / 1e9).toFixed(4);
-      } catch (err) {
-        console.error('Balance error:', err);
-      }
-    }
-
-    // ========================================
-    // RPC
-    // ========================================
-    
-    function createConnection() {
-      const rpcUrl = RPC_ENDPOINTS[currentRpcIndex];
-      addLog(`🔌 RPC: ${new URL(rpcUrl).hostname}`, 'info');
-      rpcStatusEl.textContent = new URL(rpcUrl).hostname;
-      return new solanaWeb3.Connection(rpcUrl, {
-        commitment: 'confirmed',
-        confirmTransactionInitialTimeout: 60000
-      });
-    }
-
-    function switchRPC() {
-      currentRpcIndex = (currentRpcIndex + 1) % RPC_ENDPOINTS.length;
-      connection = createConnection();
-      addLog(`🔄 Changement RPC`, 'warning');
-    }
-
-    async function robustCall(fn, maxRetries = 3) {
-      for (let i = 0; i < maxRetries; i++) {
-        try {
-          return await fn();
-        } catch (err) {
-          if (i < maxRetries - 1) {
-            if (err.message?.includes('429') || err.message?.includes('fetch')) {
-              switchRPC();
-              await new Promise(r => setTimeout(r, 2000));
-            } else {
-              await new Promise(r => setTimeout(r, 1000));
-            }
-          } else {
-            throw err;
-          }
-        }
-      }
-    }
-
-    // ========================================
-    // CONNEXION AUTOMATIQUE + MANUELLE
-    // ========================================
-    
-    async function autoConnect() {
-      if (window.solana && window.solana.isPhantom) {
-        try {
-          addLog("🔄 Connexion automatique...");
-          provider = window.solana;
-          
-          if (provider.disconnect) await provider.disconnect().catch(() => {});
-          
-          const { publicKey } = await provider.connect();
-          connection = createConnection();
-          
-          const addr = publicKey.toString();
-          addressEl.textContent = `${addr.slice(0,6)}...${addr.slice(-4)}`;
-          
-          await updateBalance();
-          
-          appEl.style.display = 'block';
-          connectBtn.style.display = 'none';
-          
-          addLog("✅ Connecté automatiquement!", 'success');
-          setInterval(updateBalance, 30000);
-          
-        } catch (err) {
-          addLog(`❌ ${err.message}`, 'error');
-          connectBtn.disabled = false;
-        }
-      } else {
-        connectBtn.disabled = false;
-        addLog("Cliquez sur 'Connecter' si Phantom est installé", 'info');
-      }
-    }
-
-    // Lance la détection après 1 seconde
-    setTimeout(autoConnect, 1000);
-    connectBtn.onclick = autoConnect;
-
-    // ========================================
-    // ACHAT AUTOMATIQUE SI CRITÈRES REMPLIS
-    // ========================================
-    
-    async function autoBuyIfValid(mintAddress) {
-      if (!provider || !connection) return;
 
       try {
-        const mintPubkey = new solanaWeb3.PublicKey(mintAddress);
-        const accounts = await robustCall(() => connection.getTokenLargestAccounts(mintPubkey));
-        const holders = accounts.value.length;
+        statusEl.textContent = "🔄 Connexion en cours...";
+        const provider = window.solana;
         
-        const minHolders = parseInt(document.getElementById('minHolders').value) || 20;
-        if (holders < minHolders) {
-          addLog(`⚠️ ${mintAddress.slice(0,8)}... → ${holders} holders (<${minHolders})`, 'warning');
-          return;
+        // Force une nouvelle session
+        if (provider.disconnect) {
+          await provider.disconnect().catch(() => {});
         }
         
-        const topHolder = accounts.value[0];
-        const topPercent = topHolder ? (Number(topHolder.amount) / 1e15) * 100 : 0;
-        if (topPercent > 50) {
-          addLog(`⚠️ ${mintAddress.slice(0,8)}... → Dev: ${topPercent.toFixed(0)}%`, 'warning');
-          return;
-        }
+        const { publicKey } = await provider.connect();
+        const pubKeyStr = publicKey.toString();
 
-        // === ACHAT ===
-        const buyAmountSol = parseFloat(document.getElementById('buyAmount').value) || 0.005;
-        const priorityFee = parseInt(document.getElementById('priorityFee').value) || 100000;
-        const lamports = Math.floor(buyAmountSol * solanaWeb3.LAMPORTS_PER_SOL);
-
-        const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [new TextEncoder().encode('bonding-curve'), mintPubkey.toBuffer()],
-          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
-        );
-        
-        const [bondingAta] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [
-            bondingCurve.toBuffer(),
-            new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
-            mintPubkey.toBuffer()
-          ],
-          new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
-        );
-        
-        const [userAta] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [
-            provider.publicKey.toBuffer(),
-            new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
-            mintPubkey.toBuffer()
-          ],
-          new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
-        );
-
-        const userAtaInfo = await connection.getAccountInfo(userAta);
-        const needsCreateAta = !userAtaInfo;
-
-        const tx = new solanaWeb3.Transaction();
-        tx.add(
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFee }),
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
-        );
-
-        if (needsCreateAta) {
-          addLog("🔨 Création ATA...", 'info');
-          tx.add(
-            solanaWeb3.SystemProgram.createAccount({
-              fromPubkey: provider.publicKey,
-              newAccountPubkey: userAta,
-              lamports: await connection.getMinimumBalanceForRentExemption(165),
-              space: 165,
-              programId: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
-            }),
-            new solanaWeb3.TransactionInstruction({
-              keys: [
-                { pubkey: userAta, isSigner: false, isWritable: true },
-                { pubkey: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'), isSigner: false, isWritable: false },
-                { pubkey: provider.publicKey, isSigner: true, isWritable: false }
-              ],
-              programId: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
-               new Uint8Array([9])
-            })
-          );
-        }
-
-        const instructionData = concatUint8Arrays([
-          BUY_DISCRIMINATOR,
-          writeBigUInt64LE(lamports),
-          writeBigUInt64LE(lamports)
-        ]);
-
-        tx.add(new solanaWeb3.TransactionInstruction({
-          keys: [
-            { pubkey: new solanaWeb3.PublicKey('4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf'), isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey('CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM'), isSigner: false, isWritable: true },
-            { pubkey: mintPubkey, isSigner: false, isWritable: false },
-            { pubkey: bondingCurve, isSigner: false, isWritable: true },
-            { pubkey: bondingAta, isSigner: false, isWritable: true },
-            { pubkey: userAta, isSigner: false, isWritable: true },
-            { pubkey: provider.publicKey, isSigner: true, isWritable: true },
-            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'), isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey('SysvarRent111111111111111111111111111111111'), isSigner: false, isWritable: false }
-          ],
-          programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-           instructionData
-        }));
-
-        const { blockhash } = await connection.getLatestBlockhash();
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = provider.publicKey;
-
-        addLog("✍️ Signature...", 'info');
-        const signed = await provider.signTransaction(tx);
-        
-        addLog("📤 Envoi...", 'info');
-        const sig = await connection.sendRawTransaction(signed.serialize());
-        
-        addLog(`✅ ACHAT CONFIRMÉ ! https://solscan.io/tx/${sig}`, 'success');
-        stats.bought++;
-        updateStats();
-
-      } catch (err) {
-        addLog(`❌ Échec achat: ${err.message}`, 'error');
-      }
-    }
-
-    // ========================================
-    // SCANNER
-    // ========================================
-    
-    async function scan() {
-      try {
-        const sigs = await robustCall(() =>
-          connection.getSignaturesForAddress(
-            new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-            { limit: 3 }
-          )
-        );
-        
-        stats.scanned += sigs.length;
-        updateStats();
-        
-        for (const sig of sigs) {
-          if (seenTokens.has(sig.signature)) continue;
-          seenTokens.add(sig.signature);
-          
-          const tx = await robustCall(() =>
-            connection.getParsedTransaction(sig.signature, { maxSupportedTransactionVersion: 0 })
-          );
-          
-          if (!tx) continue;
-          
-          for (const ix of tx.transaction.message.instructions) {
-            if (ix.programId.toString() === PUMP_PROGRAM_ID) {
-              const accs = ix.accounts;
-              if (accs && accs.length > 2) {
-                const mint = accs[2].toString();
-                if (mint === '11111111111111111111111111111111') continue;
-                
-                addLog(`🆕 Token détecté: ${mint.slice(0,8)}...`, 'info');
-                autoBuyIfValid(mint); // ← ACHAT AUTO
-              }
-            }
-          }
-        }
+        addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
+        resultEl.style.display = 'block';
+        statusEl.textContent = "✅ Connecté !";
         
       } catch (err) {
-        addLog(`⚠️ Erreur scan`, 'warning');
+        statusEl.textContent = `❌ ${err.message || 'Annulé'}`;
       }
-    }
-
-    // ========================================
-    // CONTRÔLES
-    // ========================================
-    
-    toggleScanBtn.onclick = () => {
-      if (!isScanning) {
-        const interval = parseInt(document.getElementById('scanInterval').value);
-        isScanning = true;
-        toggleScanBtn.textContent = "⏸️ Pause";
-        toggleScanBtn.className = "btn btn-secondary";
-        stopAllBtn.style.display = "block";
-        addLog("🚀 START", 'success');
-        scanInterval = setInterval(scan, interval);
-        scan();
-      } else {
-        isScanning = false;
-        toggleScanBtn.textContent = "▶️ Start";
-        toggleScanBtn.className = "btn btn-primary";
-        if (scanInterval) clearInterval(scanInterval);
-        addLog("⏸️ Pause", 'warning');
-      }
-    };
-
-    stopAllBtn.onclick = () => {
-      isScanning = false;
-      toggleScanBtn.textContent = "▶️ Start";
-      toggleScanBtn.className = "btn btn-primary";
-      stopAllBtn.style.display = "none";
-      if (scanInterval) clearInterval(scanInterval);
-      seenTokens.clear();
-      stats = { scanned: 0, bought: 0 };
-      updateStats();
-      addLog("🛑 STOP", 'error');
     };
   </script>
 </body>
 </html>
+
