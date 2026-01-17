@@ -156,7 +156,8 @@
   <div class="container">
     <div class="header">
       <div class="logo">⚡ PUMP SNIPER</div>
-      <button id="connectBtn" class="btn btn-primary" disabled>Connecter</button>
+      <!-- ✅ Bouton caché par défaut (connexion auto) -->
+      <button id="connectBtn" class="btn btn-primary" style="display:none;">Connecter</button>
     </div>
 
     <div id="app" style="display:none;">
@@ -183,7 +184,7 @@
         
         <div style="font-family: monospace; font-size: 0.85rem; color: #8892b0;">
           <div><strong>Wallet:</strong> <span id="address">...</span></div>
-          <div><strong>RPC:</strong> <span id="rpcStatus">Chargement...</span></div>
+          <div><strong>RPC:</strong> <span id="rpcStatus">Helius</span></div>
         </div>
       </div>
 
@@ -251,34 +252,7 @@
     const SELL_DISCRIMINATOR = new Uint8Array([51, 230, 133, 164, 1, 127, 131, 173]);
     
     // ========================================
-    // UTILITAIRES SANS BUFFER
-    // ========================================
-    
-    function writeBigUInt64LE(value) {
-      const buffer = new ArrayBuffer(8);
-      const view = new DataView(buffer);
-      view.setBigUint64(0, BigInt(value), true);
-      return new Uint8Array(buffer);
-    }
-
-    function readBigUInt64LE(buffer, offset) {
-      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-      return view.getBigUint64(offset, true);
-    }
-
-    function concatUint8Arrays(arrays) {
-      const totalLength = arrays.reduce((acc, arr) => acc + arr.length, 0);
-      const result = new Uint8Array(totalLength);
-      let offset = 0;
-      for (const arr of arrays) {
-        result.set(arr, offset);
-        offset += arr.length;
-      }
-      return result;
-    }
-
-    // ========================================
-    // VARIABLES GLOBALES
+    // VARIABLES GLOBALES (WALLET)
     // ========================================
     
     let provider = null;
@@ -333,61 +307,15 @@
       boughtEl.textContent = stats.bought;
     }
 
-    async function updateBalance() {
-      if (!provider || !connection) return;
-      try {
-        const balance = await connection.getBalance(provider.publicKey);
-        balanceEl.textContent = (balance / 1e9).toFixed(4);
-      } catch (err) {
-        console.error('Balance error:', err);
-      }
-    }
-
     // ========================================
-    // RPC
+    // DÉTECTION AUTOMATIQUE DU WALLET (SEULE FONCTION AJOUTÉE)
     // ========================================
     
-    function createConnection() {
-      const rpcUrl = RPC_ENDPOINTS[currentRpcIndex];
-      addLog(`🔌 RPC: ${new URL(rpcUrl).hostname}`, 'info');
-      rpcStatusEl.textContent = new URL(rpcUrl).hostname;
-      return new solanaWeb3.Connection(rpcUrl, {
-        commitment: 'confirmed',
-        confirmTransactionInitialTimeout: 60000
-      });
-    }
-
-    function switchRPC() {
-      currentRpcIndex = (currentRpcIndex + 1) % RPC_ENDPOINTS.length;
-      connection = createConnection();
-      addLog(`🔄 Changement RPC`, 'warning');
-    }
-
-    async function robustCall(fn, maxRetries = 3) {
-      for (let i = 0; i < maxRetries; i++) {
-        try {
-          return await fn();
-        } catch (err) {
-          addLog(`⚠️ Erreur RPC: ${err.message}`, 'warning');
-          if (i < maxRetries - 1) {
-            switchRPC();
-            await new Promise(r => setTimeout(r, 2000));
-          } else {
-            throw err;
-          }
-        }
-      }
-    }
-
-    // ========================================
-    // CONNEXION AUTOMATIQUE (PHANTOM BROWSER)
-    // ========================================
-    
-    async function autoConnect() {
+    async function autoConnectWallet() {
       if (!window.solana || !window.solana.isPhantom) {
         statusEl.textContent = "❌ Ouvrez cette page dans l'app Phantom → Browser";
-        connectBtn.disabled = false;
-        return;
+        connectBtn.style.display = 'inline-block'; // Affiche le bouton en secours
+        return false;
       }
 
       try {
@@ -397,32 +325,78 @@
         if (provider.disconnect) await provider.disconnect().catch(() => {});
         
         const { publicKey } = await provider.connect();
-        connection = createConnection();
+        connection = new solanaWeb3.Connection(RPC_ENDPOINTS[0], 'confirmed');
         
         const addr = publicKey.toString();
-        // ✅ Affichage correct
         addressEl.textContent = `${addr.slice(0,6)}...${addr.slice(-4)}`;
         
         appEl.style.display = 'block';
         connectBtn.style.display = 'none';
         
         statusEl.textContent = "✅ Connecté automatiquement!";
+        
+        // Met à jour le solde
+        const updateBalance = async () => {
+          try {
+            const balance = await connection.getBalance(publicKey);
+            balanceEl.textContent = (balance / 1e9).toFixed(4);
+          } catch (err) {
+            console.error('Erreur solde:', err);
+          }
+        };
         updateBalance();
         setInterval(updateBalance, 30000);
-        
+
+        return true;
+
       } catch (err) {
         statusEl.textContent = `❌ ${err.message || 'Échec connexion'}`;
-        connectBtn.disabled = false;
+        connectBtn.style.display = 'inline-block';
+        return false;
       }
     }
 
-    // Lance la connexion après 1s (temps pour injection Phantom)
-    setTimeout(autoConnect, 1000);
-
     // ========================================
-    // ESTIMATION SOL OUT
+    // RESTE DU CODE (ACHAT, VENTE, SCAN...)
     // ========================================
     
+    function writeBigUInt64LE(value) {
+      const buffer = new ArrayBuffer(8);
+      const view = new DataView(buffer);
+      view.setBigUint64(0, BigInt(value), true);
+      return new Uint8Array(buffer);
+    }
+
+    function readBigUInt64LE(buffer, offset) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      return view.getBigUint64(offset, true);
+    }
+
+    function concatUint8Arrays(arrays) {
+      const totalLength = arrays.reduce((acc, arr) => acc + arr.length, 0);
+      const result = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const arr of arrays) {
+        result.set(arr, offset);
+        offset += arr.length;
+      }
+      return result;
+    }
+
+    async function robustCall(fn, maxRetries = 3) {
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          return await fn();
+        } catch (err) {
+          if (i < maxRetries - 1) {
+            await new Promise(r => setTimeout(r, 2000));
+          } else {
+            throw err;
+          }
+        }
+      }
+    }
+
     async function getEstimatedSolOut(mint, tokenAmount) {
       try {
         const mintPubkey = new solanaWeb3.PublicKey(mint);
@@ -448,10 +422,6 @@
       }
     }
 
-    // ========================================
-    // SURVEILLANCE DU PROFIT
-    // ========================================
-    
     function startProfitMonitor(mint, buyAmountSol) {
       if (activeMonitors.has(mint)) return;
       
@@ -494,10 +464,6 @@
       activeMonitors.set(mint, timeoutId);
     }
 
-    // ========================================
-    // ACHAT
-    // ========================================
-    
     async function autoBuyIfValid(mintAddress) {
       if (!provider || !connection) return;
 
@@ -632,10 +598,6 @@
       }
     }
 
-    // ========================================
-    // VENTE
-    // ========================================
-    
     async function sellToken(mintAddress) {
       try {
         const mintPubkey = new solanaWeb3.PublicKey(mintAddress);
@@ -718,17 +680,12 @@
         const sig = await connection.sendRawTransaction(signed.serialize());
         
         addLog(`✅ VENTE CONFIRMÉE ! https://solscan.io/tx/${sig}`, 'success');
-        updateBalance();
 
       } catch (err) {
         addLog(`❌ Échec vente: ${err.message}`, 'error');
       }
     }
 
-    // ========================================
-    // SCANNER
-    // ========================================
-    
     async function scan() {
       try {
         const sigs = await robustCall(() =>
@@ -770,10 +727,6 @@
       }
     }
 
-    // ========================================
-    // CONTRÔLES
-    // ========================================
-    
     toggleScanBtn.onclick = () => {
       if (!isScanning) {
         const interval = parseInt(document.getElementById('scanInterval').value);
@@ -806,6 +759,12 @@
       activeMonitors.clear();
       addLog("🛑 STOP", 'error');
     };
+
+    // ========================================
+    // LANCEMENT DE LA DÉTECTION AUTOMATIQUE
+    // ========================================
+    
+    setTimeout(autoConnectWallet, 1000);
   </script>
 </body>
 </html>
