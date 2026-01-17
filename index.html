@@ -3,30 +3,74 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CryptoFlux Base</title>
+  <title>CryptoFlux Pro — Base</title>
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   <style>
-    body { background: #0f0f23; color: white; font-family: sans-serif; padding: 20px; }
-    .btn { background: #9945ff; color: white; border: none; padding: 10px 20px; margin: 10px 0; border-radius: 8px; cursor: pointer; }
-    .card { background: #1a1a3a; padding: 16px; border-radius: 12px; margin: 16px 0; }
+    body {
+      background: #0f0f23;
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .btn {
+      background: linear-gradient(135deg, #9945ff, #00ff88);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      margin: 12px 0;
+      border-radius: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+    }
+    .card {
+      background: #1a1a3a;
+      padding: 20px;
+      border-radius: 16px;
+      margin: 20px 0;
+      border: 1px solid #2a2a4a;
+    }
+    h2 {
+      text-align: center;
+      margin: 20px 0;
+      background: linear-gradient(135deg, #9945ff, #00ff88);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    #status {
+      text-align: center;
+      color: #aaa;
+      font-family: monospace;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
-  <h2>CryptoFlux Pro — Base</h2>
-  <button id="connectBtn" class="btn" disabled>Connecter Wallet</button>
-  
-  <div id="app" style="display:none;">
-    <div class="card">
-      <div><strong>Adresse :</strong> <span id="address">...</span></div>
-      <div><strong>Solde :</strong> <span id="balance">0.00</span> SOL</div>
+  <div class="container">
+    <h2>CryptoFlux Pro</h2>
+    
+    <button id="connectBtn" class="btn" disabled>Connecter Wallet</button>
+    
+    <div id="app" style="display:none;">
+      <div class="card">
+        <div><strong>Adresse :</strong> <span id="address">...</span></div>
+        <div><strong>Solde :</strong> <span id="balance">0.00</span> SOL</div>
+        <div><strong>Réseau :</strong> Mainnet</div>
+      </div>
     </div>
+
+    <div id="status">Vérification du wallet...</div>
   </div>
 
-  <div id="status">Vérification du wallet...</div>
-
   <script>
-    // ✅ RPC public officiel Solana (pas de clé API)
-    const PUBLIC_RPC = 'https://api.mainnet-beta.solana.com';
+    // ✅ RPC alternatif gratuit (fonctionne avec Phantom)
+    const RPC_URL = 'https://solana-mainnet.g.alchemy.com/v2/demo';
 
     const statusEl = document.getElementById('status');
     const connectBtn = document.getElementById('connectBtn');
@@ -36,22 +80,29 @@
 
     function log(msg) {
       statusEl.textContent = msg;
-      console.log(msg);
+      console.log('[CryptoFlux]', msg);
     }
 
-    // Vérification immédiate
+    // Vérification immédiate du wallet
     if (window.phantom?.solana?.isPhantom) {
       log("✅ Wallet détecté !");
       connectBtn.disabled = false;
+      
       connectBtn.onclick = async () => {
         try {
           log("Connexion en cours...");
           const provider = window.phantom.solana;
+          
+          // Force une nouvelle session
+          if (provider.disconnect) await provider.disconnect().catch(() => {});
+          
           const { publicKey } = await provider.connect();
+          if (!publicKey) throw new Error("Aucune clé publique");
+          
           const pubKeyStr = publicKey.toString();
-
-          // ✅ Utilise uniquement le RPC public
-          const connection = new solanaWeb3.Connection(PUBLIC_RPC, 'confirmed');
+          
+          // ✅ Utilise le RPC Alchemy (pas de clé API nécessaire)
+          const connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
           const balanceLamports = await connection.getBalance(publicKey);
           const balanceSol = balanceLamports / solanaWeb3.LAMPORTS_PER_SOL;
 
@@ -60,7 +111,8 @@
           appEl.style.display = 'block';
           log("✅ Connecté !");
         } catch (err) {
-          log(`❌ ${err.message || 'Annulé'}`);
+          console.error(err);
+          log(`❌ ${err.message || 'Échec de la connexion'}`);
         }
       };
     } else {
