@@ -3,83 +3,43 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CryptoFlux Pro — Base</title>
+  <title>CryptoFlux Pro</title>
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   <style>
-    body {
-      background: #0f0f23;
-      color: white;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      padding: 20px;
-      line-height: 1.6;
-    }
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-    }
-    .btn {
-      background: linear-gradient(135deg, #9945ff, #00ff88);
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      margin: 12px 0;
-      border-radius: 12px;
-      font-weight: bold;
-      cursor: pointer;
-      width: 100%;
-    }
-    .card {
-      background: #1a1a3a;
-      padding: 20px;
-      border-radius: 16px;
-      margin: 20px 0;
-      border: 1px solid #2a2a4a;
-    }
-    h2 {
-      text-align: center;
-      margin: 20px 0;
-      background: linear-gradient(135deg, #9945ff, #00ff88);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    #status {
-      text-align: center;
-      color: #aaa;
-      font-family: monospace;
-      margin-top: 10px;
-    }
+    body { background: #0f0f23; color: white; font-family: sans-serif; padding: 20px; }
+    .btn { background: #9945ff; color: white; border: none; padding: 12px 24px; margin: 12px 0; border-radius: 12px; cursor: pointer; width: 100%; }
+    .card { background: #1a1a3a; padding: 20px; border-radius: 16px; margin: 20px 0; }
+    h2 { text-align: center; margin: 20px 0; color: #00ff88; }
+    #status { text-align: center; color: #aaa; font-family: monospace; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>CryptoFlux Pro</h2>
-    
-    <button id="connectBtn" class="btn" disabled>Connecter Wallet</button>
-    
-    <div id="app" style="display:none;">
-      <div class="card">
-        <div><strong>Adresse :</strong> <span id="address">...</span></div>
-        <div><strong>Solde :</strong> <span id="balance">0.00</span> SOL</div>
-        <div><strong>Réseau :</strong> Mainnet</div>
-      </div>
+  <h2>CryptoFlux Pro</h2>
+  <button id="connectBtn" class="btn" disabled>Connecter Wallet</button>
+  
+  <div id="app" style="display:none;">
+    <div class="card">
+      <div><strong>Adresse :</strong> <span id="address">...</span></div>
+      <div><strong>Solde :</strong> — SOL</div>
+      <div><strong>Réseau :</strong> Mainnet</div>
     </div>
-
-    <div id="status">Vérification du wallet...</div>
+    <button id="startScan" class="btn" disabled>Démarrer le Scan</button>
   </div>
+
+  <div id="status">Vérification du wallet...</div>
 
   <script>
     const statusEl = document.getElementById('status');
     const connectBtn = document.getElementById('connectBtn');
+    const startScanBtn = document.getElementById('startScan');
     const appEl = document.getElementById('app');
     const addressEl = document.getElementById('address');
-    const balanceEl = document.getElementById('balance');
 
     let provider = null;
 
     function log(msg) {
       statusEl.textContent = msg;
-      console.log('[CryptoFlux]', msg);
+      console.log(msg);
     }
 
     // Vérification immédiate
@@ -92,30 +52,30 @@
           log("Connexion en cours...");
           provider = window.phantom.solana;
           
-          // Force une nouvelle session
+          // Force reconnect
           if (provider.disconnect) await provider.disconnect().catch(() => {});
           
           const { publicKey } = await provider.connect();
-          if (!publicKey) throw new Error("Aucune clé publique");
-          
           const pubKeyStr = publicKey.toString();
-          
-          // ✅ Utilise la connexion intégrée de Phantom (pas de fetch externe)
-          const balanceLamports = await provider.getBalance();
-          const balanceSol = balanceLamports / solanaWeb3.LAMPORTS_PER_SOL;
 
+          // ✅ Affiche l'adresse SANS solde
           addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
-          balanceEl.textContent = balanceSol.toFixed(4);
           appEl.style.display = 'block';
+          startScanBtn.disabled = false;
           log("✅ Connecté !");
         } catch (err) {
           console.error(err);
-          log(`❌ ${err.message || 'Échec de la connexion'}`);
+          log(`❌ ${err.message || 'Échec'}`);
         }
       };
     } else {
       log("❌ Ouvrez cette page dans l'app Phantom → Browser");
     }
+
+    // Scan simulé
+    startScanBtn.onclick = () => {
+      alert("✅ Scan activé !\nLes tokens apparaîtront ici.");
+    };
   </script>
 </body>
 </html>
