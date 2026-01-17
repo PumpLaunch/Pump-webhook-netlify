@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Pump Sniper Pro</title>
-  <!-- ✅ URL corrigée : pas d'espace -->
+  <!-- ✅ Librairie Solana sans espace -->
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   <style>
     :root {
@@ -146,14 +146,14 @@
   <div class="container">
     <div class="header">
       <div class="logo">⚡ PUMP SNIPER</div>
-      <button id="connectBtn" class="btn btn-primary">Connecter</button>
+      <button id="connectBtn" class="btn btn-primary" disabled>Connecter</button>
     </div>
 
     <div id="app" style="display:none;">
       <div class="card">
         <div class="alert alert-success">
-          <strong>✅ FOCUS TRADE MODE</strong><br>
-          Achat → Surveillance → Revente → Stop
+          <strong>✅ ACHAT AUTO</strong><br>
+          Achète si: ≥20 holders, dev ≤50%
         </div>
         
         <div class="stats">
@@ -166,8 +166,8 @@
             <div class="stat-value" id="scanned">0</div>
           </div>
           <div class="stat">
-            <div class="stat-label">EN COURS</div>
-            <div class="stat-value" id="activeTrade">0</div>
+            <div class="stat-label">ACHATS</div>
+            <div class="stat-value" id="bought">0</div>
           </div>
         </div>
         
@@ -187,12 +187,6 @@
         
         <label>💰 Montant (SOL):</label>
         <input type="number" id="buyAmount" value="0.005" step="0.001" min="0.005" max="1">
-        
-        <label>🎯 Profit cible (%):</label>
-        <input type="number" id="profitTarget" value="100" min="10" max="1000" step="10">
-        
-        <label>💧 Liquidité min (€):</label>
-        <input type="number" id="minLiquidityEur" value="10000" min="1000" step="1000">
         
         <label>👥 Holders min:</label>
         <input type="number" id="minHolders" value="20" min="5" max="100">
@@ -223,7 +217,7 @@
       </div>
     </div>
 
-    <div id="status" class="status">Cliquez sur "Connecter"</div>
+    <div id="status" class="status">Démarrage...</div>
   </div>
 
   <script>
@@ -241,7 +235,6 @@
     let currentRpcIndex = 0;
     const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
     const BUY_DISCRIMINATOR = new Uint8Array([0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea]);
-    const SELL_DISCRIMINATOR = new Uint8Array([0x66, 0x06, 0x3d, 0x12, 0x02, 0xda, 0xeb, 0xea]);
     
     // ========================================
     // UTILITAIRES SANS BUFFER
@@ -274,8 +267,7 @@
     let isScanning = false;
     let scanInterval = null;
     let seenTokens = new Set();
-    let stats = { scanned: 0 };
-    let currentTrade = null;
+    let stats = { scanned: 0, bought: 0 };
     
     const statusEl = document.getElementById('status');
     const connectBtn = document.getElementById('connectBtn');
@@ -284,7 +276,7 @@
     const addressEl = document.getElementById('address');
     const balanceEl = document.getElementById('balance');
     const scannedEl = document.getElementById('scanned');
-    const activeTradeEl = document.getElementById('activeTrade');
+    const boughtEl = document.getElementById('bought');
     const logEl = document.getElementById('log');
     const appEl = document.getElementById('app');
     const rpcStatusEl = document.getElementById('rpcStatus');
@@ -315,7 +307,7 @@
 
     function updateStats() {
       scannedEl.textContent = stats.scanned;
-      activeTradeEl.textContent = currentTrade ? '1' : '0';
+      boughtEl.textContent = stats.bought;
     }
 
     async function updateBalance() {
@@ -368,132 +360,77 @@
     }
 
     // ========================================
-    // PRIX VIA HELIUS
+    // CONNEXION AUTOMATIQUE + MANUELLE
     // ========================================
     
-    async function getTokenPrice(mintAddress) {
-      try {
-        const res = await fetch(RPC_ENDPOINTS[0], {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 'price',
-            method: 'getTokenMetadata',
-            params: { mint: mintAddress }
-          })
-        });
-        const data = await res.json();
-        const metadata = data.result;
-        
-        if (!metadata || !metadata.pumpFun) return null;
-        
-        const totalSupply = metadata.tokenInfo?.supply ? 
-          parseInt(metadata.tokenInfo.supply) / Math.pow(10, metadata.tokenInfo.decimals || 9) : 0;
-        const virtualSolReserves = metadata.pumpFun.virtualSolReserves || 0;
-        const pricePerToken = totalSupply > 0 ? virtualSolReserves / totalSupply : 0;
-        
-        return { priceSol: pricePerToken };
-      } catch (err) {
-        return null;
+    async function autoConnect() {
+      if (window.solana && window.solana.isPhantom) {
+        try {
+          addLog("🔄 Connexion automatique...");
+          provider = window.solana;
+          
+          if (provider.disconnect) await provider.disconnect().catch(() => {});
+          
+          const { publicKey } = await provider.connect();
+          connection = createConnection();
+          
+          const addr = publicKey.toString();
+          addressEl.textContent = `${addr.slice(0,6)}...${addr.slice(-4)}`;
+          
+          await updateBalance();
+          
+          appEl.style.display = 'block';
+          connectBtn.style.display = 'none';
+          
+          addLog("✅ Connecté automatiquement!", 'success');
+          setInterval(updateBalance, 30000);
+          
+        } catch (err) {
+          addLog(`❌ ${err.message}`, 'error');
+          connectBtn.disabled = false;
+        }
+      } else {
+        connectBtn.disabled = false;
+        addLog("Cliquez sur 'Connecter' si Phantom est installé", 'info');
       }
     }
 
-    // ========================================
-    // CONNEXION CORRIGÉE (UTILISE window.solana)
-    // ========================================
-    
-    connectBtn.onclick = async () => {
-      // ✅ Vérifie l'API standard Solana
-      if (!window.solana || !window.solana.isPhantom) {
-        addLog("❌ Ouvrez cette page dans l'app Phantom → Browser", 'error');
-        return;
-      }
-      
-      try {
-        addLog("🔄 Connexion...");
-        provider = window.solana; // ← API standard
-        
-        const { publicKey } = await provider.connect();
-        connection = createConnection();
-        
-        const addr = publicKey.toString();
-        addressEl.textContent = `${addr.slice(0,6)}...${addr.slice(-4)}`;
-        
-        await updateBalance();
-        
-        appEl.style.display = 'block';
-        connectBtn.style.display = 'none';
-        
-        addLog("✅ Connecté!", 'success');
-        setInterval(updateBalance, 30000);
-        
-      } catch (err) {
-        addLog(`❌ ${err.message}`, 'error');
-      }
-    };
+    // Lance la détection après 1 seconde
+    setTimeout(autoConnect, 1000);
+    connectBtn.onclick = autoConnect;
 
     // ========================================
-    // VALIDATION TOKEN
+    // ACHAT AUTOMATIQUE SI CRITÈRES REMPLIS
     // ========================================
     
-    async function validateToken(mint) {
+    async function autoBuyIfValid(mintAddress) {
+      if (!provider || !connection) return;
+
       try {
-        const priceData = await getTokenPrice(mint);
-        if (!priceData) return null;
-        
-        const supplyRes = await connection.getTokenSupply(new solanaWeb3.PublicKey(mint));
-        const totalSupply = supplyRes.value.uiAmount || 0;
-        const liquiditySol = priceData.priceSol * totalSupply;
-        const liquidityEur = liquiditySol * 150 * 0.91;
-        
-        const minLiquidityEur = parseFloat(document.getElementById('minLiquidityEur').value) || 10000;
-        if (liquidityEur < minLiquidityEur) {
-          addLog(`⚠️ ${mint.slice(0,8)}... → ${Math.round(liquidityEur)} € (<${minLiquidityEur} €)`, 'warning');
-          return null;
-        }
-        
-        const accounts = await robustCall(() => connection.getTokenLargestAccounts(new solanaWeb3.PublicKey(mint)));
+        const mintPubkey = new solanaWeb3.PublicKey(mintAddress);
+        const accounts = await robustCall(() => connection.getTokenLargestAccounts(mintPubkey));
         const holders = accounts.value.length;
+        
         const minHolders = parseInt(document.getElementById('minHolders').value) || 20;
         if (holders < minHolders) {
-          addLog(`⚠️ ${mint.slice(0,8)}... → ${holders} holders (<${minHolders})`, 'warning');
-          return null;
+          addLog(`⚠️ ${mintAddress.slice(0,8)}... → ${holders} holders (<${minHolders})`, 'warning');
+          return;
         }
         
-        const top = accounts.value[0];
-        const topPercent = top ? (Number(top.amount) / 1e15) * 100 : 0;
+        const topHolder = accounts.value[0];
+        const topPercent = topHolder ? (Number(topHolder.amount) / 1e15) * 100 : 0;
         if (topPercent > 50) {
-          addLog(`⚠️ ${mint.slice(0,8)}... → Dev: ${topPercent.toFixed(0)}% (>50%)`, 'warning');
-          return null;
+          addLog(`⚠️ ${mintAddress.slice(0,8)}... → Dev: ${topPercent.toFixed(0)}%`, 'warning');
+          return;
         }
-        
-        return { mint, holders, liquidityEur, priceSol: priceData.priceSol };
-        
-      } catch (err) {
-        addLog(`⚠️ Impossible d'analyser ${mint.slice(0,8)}...`, 'warning');
-        return null;
-      }
-    }
 
-    // ========================================
-    // ACHAT + MODE FOCUS
-    // ========================================
-    
-    async function buyToken(data) {
-      if (!provider || !connection || currentTrade) return false;
+        // === ACHAT ===
+        const buyAmountSol = parseFloat(document.getElementById('buyAmount').value) || 0.005;
+        const priorityFee = parseInt(document.getElementById('priorityFee').value) || 100000;
+        const lamports = Math.floor(buyAmountSol * solanaWeb3.LAMPORTS_PER_SOL);
 
-      const mint = data.mint;
-      const amountSol = parseFloat(document.getElementById('buyAmount').value) || 0.005;
-      const fee = parseInt(document.getElementById('priorityFee').value) || 100000;
-
-      try {
-        addLog(`🔄 Achat ${mint.slice(0,8)}... (${amountSol} SOL)`, 'info');
-        const mintPk = new solanaWeb3.PublicKey(mint);
-        const lamports = Math.floor(amountSol * 1e9);
-        
         const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [new TextEncoder().encode('bonding-curve'), mintPk.toBuffer()],
+          [new TextEncoder().encode('bonding-curve'), mintPubkey.toBuffer()],
           new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
         );
         
@@ -501,7 +438,7 @@
           [
             bondingCurve.toBuffer(),
             new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
-            mintPk.toBuffer()
+            mintPubkey.toBuffer()
           ],
           new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
         );
@@ -510,20 +447,20 @@
           [
             provider.publicKey.toBuffer(),
             new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
-            mintPk.toBuffer()
+            mintPubkey.toBuffer()
           ],
           new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
         );
-        
+
         const userAtaInfo = await connection.getAccountInfo(userAta);
         const needsCreateAta = !userAtaInfo;
-        
+
         const tx = new solanaWeb3.Transaction();
         tx.add(
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: fee }),
+          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFee }),
           solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
         );
-        
+
         if (needsCreateAta) {
           addLog("🔨 Création ATA...", 'info');
           tx.add(
@@ -545,18 +482,18 @@
             })
           );
         }
-        
+
         const instructionData = concatUint8Arrays([
           BUY_DISCRIMINATOR,
           writeBigUInt64LE(lamports),
           writeBigUInt64LE(lamports)
         ]);
-        
+
         tx.add(new solanaWeb3.TransactionInstruction({
           keys: [
             { pubkey: new solanaWeb3.PublicKey('4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf'), isSigner: false, isWritable: false },
             { pubkey: new solanaWeb3.PublicKey('CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM'), isSigner: false, isWritable: true },
-            { pubkey: mintPk, isSigner: false, isWritable: false },
+            { pubkey: mintPubkey, isSigner: false, isWritable: false },
             { pubkey: bondingCurve, isSigner: false, isWritable: true },
             { pubkey: bondingAta, isSigner: false, isWritable: true },
             { pubkey: userAta, isSigner: false, isWritable: true },
@@ -568,144 +505,23 @@
           programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
            instructionData
         }));
-        
-        const { blockhash } = await robustCall(() => connection.getLatestBlockhash());
+
+        const { blockhash } = await connection.getLatestBlockhash();
         tx.recentBlockhash = blockhash;
         tx.feePayer = provider.publicKey;
-        
+
         addLog("✍️ Signature...", 'info');
         const signed = await provider.signTransaction(tx);
         
         addLog("📤 Envoi...", 'info');
-        const sig = await robustCall(() => connection.sendRawTransaction(signed.serialize()));
+        const sig = await connection.sendRawTransaction(signed.serialize());
         
-        addLog(`🔗 solscan.io/tx/${sig}`, 'info');
-        const conf = await robustCall(() => connection.confirmTransaction(sig));
-        
-        if (conf.value.err) throw new Error('TX failed');
-        
-        addLog(`✅ ACHAT CONFIRMÉ ${mint.slice(0,8)}!`, 'success');
-        stats.bought = (stats.bought || 0) + 1;
+        addLog(`✅ ACHAT CONFIRMÉ ! https://solscan.io/tx/${sig}`, 'success');
+        stats.bought++;
         updateStats();
-        await updateBalance();
-        
-        const profitTarget = parseFloat(document.getElementById('profitTarget').value) || 100;
-        const targetPrice = data.priceSol * (1 + profitTarget / 100);
-        currentTrade = { mint, buyPrice: data.priceSol, targetPrice, txid: sig };
-        updateStats();
-        addLog(`🎯 Focus sur ${mint.slice(0,8)}... → Cible: ${targetPrice.toFixed(6)} SOL`, 'success');
-        
-        if (scanInterval) {
-          clearInterval(scanInterval);
-          scanInterval = null;
-          isScanning = false;
-          toggleScanBtn.textContent = "▶️ Start";
-          toggleScanBtn.className = "btn btn-primary";
-          stopAllBtn.style.display = "none";
-        }
-        
-        monitorForSale();
-        return true;
-        
+
       } catch (err) {
         addLog(`❌ Échec achat: ${err.message}`, 'error');
-        return false;
-      }
-    }
-
-    // ========================================
-    // SURVEILLANCE & REVENTE
-    // ========================================
-    
-    async function monitorForSale() {
-      if (!currentTrade) return;
-      
-      const check = async () => {
-        try {
-          const priceData = await getTokenPrice(currentTrade.mint);
-          if (priceData && priceData.priceSol >= currentTrade.targetPrice) {
-            addLog(`🎯 Profit atteint ! Vente en cours...`, 'success');
-            await sellToken(currentTrade.mint);
-          } else {
-            setTimeout(check, 5000);
-          }
-        } catch (err) {
-          setTimeout(check, 10000);
-        }
-      };
-      
-      check();
-    }
-
-    async function sellToken(mintAddress) {
-      if (!provider || !connection || !currentTrade) return;
-      
-      try {
-        addLog(`🔄 Vente de ${mintAddress.slice(0,8)}...`, 'info');
-        const mintPk = new solanaWeb3.PublicKey(mintAddress);
-        const fee = parseInt(document.getElementById('priorityFee').value) || 100000;
-        
-        const [bondingCurve] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [new TextEncoder().encode('bonding-curve'), mintPk.toBuffer()],
-          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
-        );
-        
-        const [bondingAta] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [
-            bondingCurve.toBuffer(),
-            new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
-            mintPk.toBuffer()
-          ],
-          new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
-        );
-        
-        const [userAta] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [
-            provider.publicKey.toBuffer(),
-            new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
-            mintPk.toBuffer()
-          ],
-          new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
-        );
-        
-        const tx = new solanaWeb3.Transaction();
-        tx.add(
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: fee }),
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 100000 })
-        );
-        
-        tx.add(new solanaWeb3.TransactionInstruction({
-          keys: [
-            { pubkey: new solanaWeb3.PublicKey('4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf'), isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey('CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM'), isSigner: false, isWritable: true },
-            { pubkey: mintPk, isSigner: false, isWritable: false },
-            { pubkey: bondingCurve, isSigner: false, isWritable: true },
-            { pubkey: bondingAta, isSigner: false, isWritable: true },
-            { pubkey: userAta, isSigner: false, isWritable: true },
-            { pubkey: provider.publicKey, isSigner: true, isWritable: true },
-            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'), isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey('SysvarRent111111111111111111111111111111111'), isSigner: false, isWritable: false }
-          ],
-          programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-           SELL_DISCRIMINATOR
-        }));
-        
-        const { blockhash } = await robustCall(() => connection.getLatestBlockhash());
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = provider.publicKey;
-        
-        const signed = await provider.signTransaction(tx);
-        const sig = await robustCall(() => connection.sendRawTransaction(signed.serialize()));
-        
-        addLog(`✅ VENTE CONFIRMÉE ${mintAddress.slice(0,8)}!`, 'success');
-        addLog(`🔗 solscan.io/tx/${sig}`, 'info');
-        
-        currentTrade = null;
-        updateStats();
-        
-      } catch (err) {
-        addLog(`❌ Échec vente: ${err.message}`, 'error');
       }
     }
 
@@ -714,8 +530,6 @@
     // ========================================
     
     async function scan() {
-      if (currentTrade) return;
-      
       try {
         const sigs = await robustCall(() =>
           connection.getSignaturesForAddress(
@@ -745,11 +559,7 @@
                 if (mint === '11111111111111111111111111111111') continue;
                 
                 addLog(`🆕 Token détecté: ${mint.slice(0,8)}...`, 'info');
-                const validData = await validateToken(mint);
-                if (validData) {
-                  addLog(`✅ Critères remplis → Achat...`, 'success');
-                  await buyToken(validData);
-                }
+                autoBuyIfValid(mint); // ← ACHAT AUTO
               }
             }
           }
@@ -790,8 +600,7 @@
       stopAllBtn.style.display = "none";
       if (scanInterval) clearInterval(scanInterval);
       seenTokens.clear();
-      stats = { scanned: 0 };
-      currentTrade = null;
+      stats = { scanned: 0, bought: 0 };
       updateStats();
       addLog("🛑 STOP", 'error');
     };
