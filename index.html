@@ -234,7 +234,8 @@
     
     let currentRpcIndex = 0;
     const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
-    const BUY_DISCRIMINATOR = new Uint8Array([0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea]);
+    const BUY_DISCRIMINATOR = new Uint8Array([102, 6, 61, 18, 1, 218, 235, 234]);
+    const CREATE_DISCRIMINATOR = new Uint8Array([24, 30, 200, 40, 5, 28, 7, 119]);
     
     // ========================================
     // UTILITAIRES SANS BUFFER
@@ -245,6 +246,11 @@
       const view = new DataView(buffer);
       view.setBigUint64(0, BigInt(value), true);
       return new Uint8Array(buffer);
+    }
+
+    function readBigUInt64LE(buffer, offset) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      return view.getBigUint64(offset, true);
     }
 
     function concatUint8Arrays(arrays) {
@@ -294,7 +300,7 @@
       
       const item = document.createElement('div');
       item.className = 'log-item';
-      item.innerHTML = `<span class="log-time">[${time}]</span><span style="color:${color}">${msg}</span>`;
+      item.innerHTML = `<span class="log-time">[\( {time}]</span><span style="color: \){color}">${msg}</span>`;
       logEl.insertBefore(item, logEl.firstChild);
       
       while (logEl.children.length > 50) {
@@ -375,7 +381,7 @@
           connection = createConnection();
           
           const addr = publicKey.toString();
-          addressEl.textContent = `${addr.slice(0,6)}...${addr.slice(-4)}`;
+          addressEl.textContent = `\( {addr.slice(0,6)}... \){addr.slice(-4)}`;
           
           await updateBalance();
           
@@ -413,7 +419,7 @@
         
         const minHolders = parseInt(document.getElementById('minHolders').value) || 20;
         if (holders < minHolders) {
-          addLog(`⚠️ ${mintAddress.slice(0,8)}... → ${holders} holders (<${minHolders})`, 'warning');
+          addLog(`⚠️ ${mintAddress.slice(0,8)}... → \( {holders} holders (< \){minHolders})`, 'warning');
           return;
         }
         
@@ -434,6 +440,24 @@
           new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
         );
         
+        const bondingData = await robustCall(() => connection.getAccountInfo(bondingCurve));
+        if (!bondingData) {
+          addLog(`❌ Données bonding curve indisponibles`, 'error');
+          return;
+        }
+        const data = bondingData.data;
+        const v_token = readBigUInt64LE(data, 8);
+        const v_sol = readBigUInt64LE(data, 16);
+
+        const sol_in = BigInt(lamports);
+        let token_out = (sol_in * v_token) / (v_sol + sol_in);
+        if (token_out === 0n) token_out = 1n;
+
+        const slippagePercent = 10n; // 10% slippage
+        const min_token_out = token_out * (100n - slippagePercent) / 100n;
+
+        const max_sol_cost = sol_in * (100n + slippagePercent) / 100n;
+
         const [bondingAta] = solanaWeb3.PublicKey.findProgramAddressSync(
           [
             bondingCurve.toBuffer(),
@@ -474,19 +498,19 @@
             new solanaWeb3.TransactionInstruction({
               keys: [
                 { pubkey: userAta, isSigner: false, isWritable: true },
-                { pubkey: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'), isSigner: false, isWritable: false },
-                { pubkey: provider.publicKey, isSigner: true, isWritable: false }
+                { pubkey: mintPubkey, isSigner: false, isWritable: false },
+                { pubkey: provider.publicKey, isSigner: false, isWritable: false }
               ],
               programId: new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
-               new Uint8Array([9])
+              data: new Uint8Array([1])
             })
           );
         }
 
         const instructionData = concatUint8Arrays([
           BUY_DISCRIMINATOR,
-          writeBigUInt64LE(lamports),
-          writeBigUInt64LE(lamports)
+          writeBigUInt64LE(min_token_out),
+          writeBigUInt64LE(max_sol_cost)
         ]);
 
         tx.add(new solanaWeb3.TransactionInstruction({
@@ -503,7 +527,7 @@
             { pubkey: new solanaWeb3.PublicKey('SysvarRent111111111111111111111111111111111'), isSigner: false, isWritable: false }
           ],
           programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-           instructionData
+          data: instructionData
         }));
 
         const { blockhash } = await connection.getLatestBlockhash();
@@ -534,7 +558,7 @@
         const sigs = await robustCall(() =>
           connection.getSignaturesForAddress(
             new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-            { limit: 3 }
+            { limit: 10 }
           )
         );
         
@@ -552,14 +576,17 @@
           if (!tx) continue;
           
           for (const ix of tx.transaction.message.instructions) {
-            if (ix.programId.toString() === PUMP_PROGRAM_ID) {
-              const accs = ix.accounts;
-              if (accs && accs.length > 2) {
-                const mint = accs[2].toString();
-                if (mint === '11111111111111111111111111111111') continue;
-                
-                addLog(`🆕 Token détecté: ${mint.slice(0,8)}...`, 'info');
-                autoBuyIfValid(mint); // ← ACHAT AUTO
+            if (ix.programId.toString() === PUMP_PROGRAM_ID && ix.data && ix.data.length >= 8) {
+              const discrim = ix.data.subarray(0, 8);
+              if (discrim.every((v, i) => v === CREATE_DISCRIMINATOR[i])) {
+                const accs = ix.accounts;
+                if (accs && accs.length > 2) {
+                  const mint = accs[2].toString();
+                  if (mint === '11111111111111111111111111111111') continue;
+                  
+                  addLog(`🆕 Token détecté: ${mint.slice(0,8)}...`, 'info');
+                  await autoBuyIfValid(mint); // ← ACHAT AUTO
+                }
               }
             }
           }
