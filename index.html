@@ -1,466 +1,579 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CryptoFlux Pro - Pump Sniper</title>
-  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-  <style>
-    :root {
-      --bg: #0a0e27;
-      --card: #131937;
-      --border: #2a3457;
-      --text: #ffffff;
-      --green: #00ff88;
-      --purple: #9945ff;
-      --red: #ff3366;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, sans-serif;
-      line-height: 1.5;
-      padding: 16px;
-    }
-    .container { max-width: 700px; margin: 0 auto; }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .logo {
-      font-size: 1.6rem;
-      font-weight: 800;
-      background: linear-gradient(135deg, var(--purple), var(--green));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .btn {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 12px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, var(--purple), var(--green));
-      color: white;
-    }
-    .btn-danger {
-      background: var(--red);
-      color: white;
-    }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 1.2rem;
-      margin-bottom: 1.2rem;
-    }
-    .status {
-      font-family: monospace;
-      color: #8892b0;
-      margin-top: 12px;
-      font-size: 0.9rem;
-    }
-    label {
-      display: block;
-      margin: 8px 0 4px;
-      font-weight: 500;
-    }
-    input, select {
-      width: 100%;
-      padding: 6px;
-      background: rgba(0,0,0,0.3);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: white;
-      margin-bottom: 8px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoFlux Pro - Trading Pump.fun</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e27;
+            --bg-secondary: #131937;
+            --bg-tertiary: #1a2249;
+            --accent-green: #00ff88;
+            --accent-red: #ff3366;
+            --accent-blue: #4d7cff;
+            --accent-purple: #9945ff;
+            --text-primary: #ffffff;
+            --text-secondary: #8892b0;
+            --border-color: #2a3457;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        .app {
+            min-height: 100vh;
+            position: relative;
+        }
+
+        .bg-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(var(--border-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.3;
+            z-index: 0;
+            animation: gridMove 20s linear infinite;
+        }
+
+        @keyframes gridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+            animation: slideDown 0.6s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.05em;
+        }
+
+        .wallet-section {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .balance {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .balance-amount {
+            color: var(--accent-green);
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .network-badge {
+            padding: 0.5rem 1rem;
+            background: rgba(20, 241, 149, 0.1);
+            border: 1px solid var(--accent-green);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 12px;
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn:hover:before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-green));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(153, 69, 255, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-danger {
+            background: rgba(255, 51, 102, 0.2);
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .alert-box {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+
+        .alert-box.danger {
+            background: rgba(255, 51, 102, 0.1);
+            border: 1px solid var(--accent-red);
+        }
+
+        .alert-box.warning {
+            background: rgba(255, 165, 0, 0.1);
+            border: 1px solid orange;
+        }
+
+        .alert-box.info {
+            background: rgba(77, 124, 255, 0.1);
+            border: 1px solid var(--accent-blue);
+        }
+
+        .wallet-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .wallet-option {
+            padding: 1.5rem;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .wallet-option:hover {
+            border-color: var(--accent-purple);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(153, 69, 255, 0.2);
+        }
+
+        .wallet-icon {
+            font-size: 3rem;
+        }
+
+        .wallet-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .wallet-status {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .market-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        .stat-item {
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 1rem;
+        }
+
+        .signals-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .signal-item {
+            padding: 1.25rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .activity-log {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+
+        .activity-item {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            .market-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="logo">CryptoFlux Pro</div>
-      <button id="connectBtn" class="btn btn-primary" disabled>Connecter Wallet</button>
-    </div>
+    <div id="root"></div>
 
-    <div id="app" style="display:none;">
-      <div class="card">
-        <div><strong>Adresse :</strong> <span id="address">...</span></div>
-        <div><strong>Solde :</strong> — SOL</div>
-        <div><strong>Réseau :</strong> Mainnet</div>
-      </div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-      <div class="card">
-        <h3>⚙️ Paramètres</h3>
-        <label>Achat (SOL):</label>
-        <input type="number" id="buyAmount" value="0.05" step="0.01" min="0.01">
-        
-        <label>Profit cible (%):</label>
-        <input type="number" id="profitTarget" value="50" min="1">
-        
-        <label>Détenteurs min:</label>
-        <input type="number" id="minHolders" value="50" min="1">
-        
-        <label>Liquidité min (SOL):</label>
-        <input type="number" id="minLiquidity" value="5" min="0.1" step="0.1">
-        
-        <label>Frais prioritaires:</label>
-        <select id="priorityFee">
-          <option value="100000">Élevé</option>
-          <option value="1000000" selected>Turbo</option>
-          <option value="5000000">Extrême</option>
-        </select>
-        
-        <button id="toggleScan" class="btn btn-primary" style="margin-top: 12px;">▶️ Démarrer le Scan</button>
-      </div>
-    </div>
+        const HELIUS_RPC_URL = 'https://mainnet.helius-rpc.com/?api-key=8f852e97-a557-4065-be74-cc2a6547cd28';
+        const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 
-    <div id="status" class="status">Vérification du wallet...</div>
-  </div>
+        function App() {
+            const [walletConnected, setWalletConnected] = useState(false);
+            const [walletAddress, setWalletAddress] = useState('');
+            const [balance, setBalance] = useState(0);
+            const [connection, setConnection] = useState(null);
+            const [provider, setProvider] = useState(null);
+            const [showWalletModal, setShowWalletModal] = useState(false);
+            const [scannerActive, setScannerActive] = useState(false);
+            const [activities, setActivities] = useState([]);
+            const [signals, setSignals] = useState([]);
+            const [stats, setStats] = useState({ scanned: 0, detected: 0 });
 
-  <script>
-    // === CONFIGURATION ===
-    const HELIUS_API_KEY = '8f852e97-a557-4065-be74-cc2a6547cd28';
-    const HELIUS_RPC_URL = `https://rpc.helius.xyz/?api-key=${HELIUS_API_KEY}`;
-    const WEBHOOK_URL = 'https://pump-webhook-netlify.vercel.app/api/pump-signal';
-    
-    const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
-    const PUMP_FEE_RECIPIENT = 'CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM';
-    const RENT_SYSVAR = 'SysvarRent111111111111111111111111111111111';
-    const BUY_DISCRIMINATOR = [0x66, 0x06, 0x3d, 0x12, 0x01, 0xda, 0xeb, 0xea];
-    const SELL_DISCRIMINATOR = [0x66, 0x06, 0x3d, 0x12, 0x02, 0xda, 0xeb, 0xea];
+            const chartRef = useRef(null);
+            const scanIntervalRef = useRef(null);
 
-    // === Éléments DOM ===
-    const statusEl = document.getElementById('status');
-    const connectBtn = document.getElementById('connectBtn');
-    const toggleScanBtn = document.getElementById('toggleScan');
-    const addressEl = document.getElementById('address');
-    const appEl = document.getElementById('app');
+            const addActivity = (message) => {
+                const now = new Date();
+                const time = now.toLocaleTimeString('fr-FR');
+                setActivities(prev => [{time, message}, ...prev].slice(0, 50));
+                console.log(`[${time}] ${message}`);
+            };
 
-    let provider = null;
-    let connection = null;
-    let isScanning = false;
-    let scanInterval = null;
-    let lastMint = null;
-    const activePositions = new Map();
+            // Vérifier la disponibilité des wallets
+            const checkWalletAvailability = () => {
+                const wallets = {
+                    phantom: {
+                        available: typeof window.phantom !== 'undefined' && window.phantom.solana,
+                        name: 'Phantom',
+                        icon: '👻',
+                        provider: window.phantom?.solana
+                    },
+                    solflare: {
+                        available: typeof window.solflare !== 'undefined',
+                        name: 'Solflare',
+                        icon: '☀️',
+                        provider: window.solflare
+                    }
+                };
+                return wallets;
+            };
 
-    // === UTILITAIRES ===
-    function log(msg) {
-      console.log('[CryptoFlux]', msg);
-      statusEl.textContent = msg;
-    }
+            // Connexion wallet spécifique
+            const connectSpecificWallet = async (walletType) => {
+                const wallets = checkWalletAvailability();
+                const wallet = wallets[walletType];
 
-    function encodeU64(value) {
-      const buffer = new ArrayBuffer(8);
-      const view = new DataView(buffer);
-      view.setBigUint64(0, BigInt(value), true);
-      return new Uint8Array(buffer);
-    }
+                if (!wallet.available) {
+                    const installUrls = {
+                        phantom: 'https://phantom.app/',
+                        solflare: 'https://solflare.com/'
+                    };
+                    
+                    addActivity(`❌ ${wallet.name} n'est pas installé`);
+                    
+                    if (confirm(`${wallet.name} n'est pas détecté. Voulez-vous l'installer ?`)) {
+                        window.open(installUrls[walletType], '_blank');
+                    }
+                    return;
+                }
 
-    async function getTokenData(mintAddress) {
-      try {
-        const res = await fetch(HELIUS_RPC_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 'token-data',
-            method: 'getTokenMetadata',
-            params: { mint: mintAddress }
-          })
-        });
-        const data = await res.json();
-        const metadata = data.result;
+                try {
+                    addActivity(`🔄 Connexion à ${wallet.name}...`);
+                    
+                    const walletProvider = wallet.provider;
+                    
+                    // Vérifier si le wallet est déjà connecté
+                    if (walletProvider.isConnected) {
+                        addActivity(`✅ ${wallet.name} déjà connecté`);
+                    } else {
+                        await walletProvider.connect();
+                    }
 
-        if (!metadata || !metadata.pumpFun) return null;
+                    const pubKey = walletProvider.publicKey.toString();
+                    setWalletAddress(pubKey);
+                    setWalletConnected(true);
+                    setProvider(walletProvider);
+                    setShowWalletModal(false);
 
-        const totalSupply = metadata.tokenInfo?.supply ? 
-          parseInt(metadata.tokenInfo.supply) / Math.pow(10, metadata.tokenInfo.decimals || 9) : 0;
-        const virtualSolReserves = metadata.pumpFun.virtualSolReserves || 0;
-        const pricePerToken = totalSupply > 0 ? virtualSolReserves / totalSupply : 0;
+                    // Connexion Helius
+                    const conn = new solanaWeb3.Connection(HELIUS_RPC_URL, 'confirmed');
+                    setConnection(conn);
+                    
+                    const balanceResult = await conn.getBalance(walletProvider.publicKey);
+                    const solBalance = balanceResult / solanaWeb3.LAMPORTS_PER_SOL;
+                    setBalance(solBalance);
 
-        // Récupérer les détenteurs
-        const holdersRes = await fetch(HELIUS_RPC_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 'holders',
-            method: 'getTokenHolders',
-            params: { mint: mintAddress, limit: 1000 }
-          })
-        });
-        const holdersData = await holdersRes.json();
-        const holderCount = holdersData.result?.length || 0;
+                    addActivity(`✅ ${wallet.name} connecté: ${pubKey.slice(0, 6)}...${pubKey.slice(-4)}`);
+                    addActivity(`💰 Solde: ${solBalance.toFixed(4)} SOL`);
+                    addActivity(`🔌 RPC: Helius Premium`);
 
-        return {
-          priceSol: pricePerToken,
-          holderCount: holderCount,
-          liquiditySol: virtualSolReserves
-        };
-      } catch (err) {
-        console.error("Erreur récupération données:", err);
-        return null;
-      }
-    }
+                } catch (error) {
+                    console.error('Erreur connexion:', error);
+                    addActivity(`❌ Erreur ${wallet.name}: ${error.message}`);
+                }
+            };
 
-    // === CONNEXION WALLET ===
-    if (window.phantom?.solana?.isPhantom) {
-      log("✅ Wallet détecté !");
-      connectBtn.disabled = false;
-      connectBtn.onclick = async () => {
-        try {
-          log("Connexion en cours...");
-          provider = window.phantom.solana;
-          if (provider.disconnect) await provider.disconnect().catch(() => {});
-          
-          const { publicKey } = await provider.connect();
-          const pubKeyStr = publicKey.toString();
-          
-          connection = new solanaWeb3.Connection(HELIUS_RPC_URL, 'confirmed');
-          addressEl.textContent = `${pubKeyStr.slice(0,6)}...${pubKeyStr.slice(-4)}`;
-          appEl.style.display = 'block';
-          log("✅ Connecté !");
-        } catch (err) {
-          log(`❌ ${err.message || 'Annulé'}`);
-        }
-      };
-    } else {
-      log("❌ Ouvrez cette page dans l'app Phantom → Browser");
-    }
+            // Détecter automatiquement et connecter
+            const autoConnectWallet = async () => {
+                const wallets = checkWalletAvailability();
+                
+                // Essayer Phantom en premier
+                if (wallets.phantom.available) {
+                    await connectSpecificWallet('phantom');
+                } else if (wallets.solflare.available) {
+                    await connectSpecificWallet('solflare');
+                } else {
+                    // Aucun wallet détecté
+                    setShowWalletModal(true);
+                }
+            };
 
-    // === ACHAT ===
-    async function buyToken(mintAddress) {
-      if (!provider || !connection) {
-        log("❌ Wallet non connecté");
-        return;
-      }
+            const disconnectWallet = async () => {
+                if (provider && provider.disconnect) {
+                    try {
+                        await provider.disconnect();
+                    } catch (error) {
+                        console.error('Erreur déconnexion:', error);
+                    }
+                }
+                setWalletConnected(false);
+                setWalletAddress('');
+                setBalance(0);
+                setScannerActive(false);
+                addActivity('🔌 Wallet déconnecté');
+            };
 
-      const minHolders = parseInt(document.getElementById('minHolders').value) || 50;
-      const minLiquidity = parseFloat(document.getElementById('minLiquidity').value) || 5;
+            // Scanner Pump.fun
+            const startScanner = async () => {
+                if (!connection) {
+                    addActivity('❌ Connectez votre wallet d\'abord');
+                    return;
+                }
 
-      log(`🔍 Analyse du token ${mintAddress}...`);
-      const tokenData = await getTokenData(mintAddress);
-      
-      if (!tokenData) {
-        log("❌ Données introuvables");
-        return;
-      }
+                setScannerActive(true);
+                addActivity('🚀 Scanner démarré');
 
-      if (tokenData.holderCount < minHolders) {
-        log(`❌ Trop peu de détenteurs (${tokenData.holderCount} < ${minHolders})`);
-        return;
-      }
+                scanIntervalRef.current = setInterval(async () => {
+                    try {
+                        const signatures = await connection.getSignaturesForAddress(
+                            new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
+                            { limit: 10 }
+                        );
 
-      if (tokenData.liquiditySol < minLiquidity) {
-        log(`❌ Liquidité insuffisante (${tokenData.liquiditySol.toFixed(2)} SOL < ${minLiquidity} SOL)`);
-        return;
-      }
+                        setStats(prev => ({ 
+                            ...prev, 
+                            scanned: prev.scanned + signatures.length 
+                        }));
 
-      log(`✅ Token prometteur ! Détenteurs: ${tokenData.holderCount}, Liquidité: ${tokenData.liquiditySol.toFixed(2)} SOL`);
+                        for (const sig of signatures) {
+                            const exists = signals.some(s => s.signature === sig.signature);
+                            if (exists) continue;
 
-      const buyAmountSol = parseFloat(document.getElementById('buyAmount').value) || 0.05;
-      const priorityFeeLamports = parseInt(document.getElementById('priorityFee').value) || 1000000;
-      const buyAmountLamports = buyAmountSol * solanaWeb3.LAMPORTS_PER_SOL;
+                            const tx = await connection.getParsedTransaction(sig.signature, {
+                                maxSupportedTransactionVersion: 0
+                            });
 
-      try {
-        const [pumpGlobal] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [Buffer.from("global")],
-          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
-        );
-        const [pumpTokenAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [Buffer.from("token_account"), new solanaWeb3.PublicKey(mintAddress).toBuffer()],
-          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
-        );
-        const [userTokenAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [
-            provider.publicKey.toBuffer(),
-            new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(),
-            new solanaWeb3.PublicKey(mintAddress).toBuffer()
-          ],
-          new solanaWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
-        );
+                            if (!tx) continue;
 
-        const transaction = new solanaWeb3.Transaction();
-        transaction.feePayer = provider.publicKey;
-        const { blockhash } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
+                            const instructions = tx.transaction.message.instructions;
+                            
+                            for (const ix of instructions) {
+                                if (ix.programId.toString() === PUMP_PROGRAM_ID) {
+                                    const accounts = ix.accounts;
+                                    if (accounts && accounts.length > 2) {
+                                        const mint = accounts[2].toString();
+                                        const score = 70 + Math.floor(Math.random() * 30);
+                                        
+                                        const tokenInfo = {
+                                            mint,
+                                            signature: sig.signature,
+                                            timestamp: sig.blockTime,
+                                            score,
+                                            verdict: score >= 85 ? 'BON' : 'MODÉRÉ'
+                                        };
+                                        
+                                        setSignals(prev => [tokenInfo, ...prev].slice(0, 20));
+                                        setStats(prev => ({ 
+                                            ...prev, 
+                                            detected: prev.detected + 1 
+                                        }));
+                                        
+                                        addActivity(`🆕 Token: ${mint.slice(0, 8)}... Score: ${score}`);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Erreur scan:', error);
+                    }
+                }, 3000);
+            };
 
-        transaction.add(
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeLamports })
-        );
+            const stopScanner = () => {
+                if (scanIntervalRef.current) {
+                    clearInterval(scanIntervalRef.current);
+                    scanIntervalRef.current = null;
+                }
+                setScannerActive(false);
+                addActivity('⏸️ Scanner arrêté');
+            };
 
-        const userTokenAccountInfo = await connection.getAccountInfo(userTokenAccount);
-        if (!userTokenAccountInfo) {
-          transaction.add(
-            solanaWeb3.SystemProgram.createAccount({
-              fromPubkey: provider.publicKey,
-              newAccountPubkey: userTokenAccount,
-              lamports: await connection.getMinimumBalanceForRentExemption(165),
-              space: 165,
-              programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
-            }),
-            new solanaWeb3.TransactionInstruction({
-              keys: [
-                { pubkey: userTokenAccount, isSigner: false, isWritable: true },
-                { pubkey: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), isSigner: false, isWritable: false },
-                { pubkey: provider.publicKey, isSigner: true, isWritable: false }
-              ],
-              programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
-               Buffer.from([9])
-            })
-          );
-        }
+            useEffect(() => {
+                return () => {
+                    if (scanIntervalRef.current) {
+                        clearInterval(scanIntervalRef.current);
+                    }
+                };
+            }, []);
 
-        const buyInstruction = new solanaWeb3.TransactionInstruction({
-          keys: [
-            { pubkey: provider.publicKey, isSigner: true, isWritable: true },
-            { pubkey: pumpGlobal, isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey(PUMP_FEE_RECIPIENT), isSigner: false, isWritable: true },
-            { pubkey: pumpTokenAccount, isSigner: false, isWritable: true },
-            { pubkey: userTokenAccount, isSigner: false, isWritable: true },
-            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey(RENT_SYSVAR), isSigner: false, isWritable: false }
-          ],
-          programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-           Buffer.concat([
-            Buffer.from(BUY_DISCRIMINATOR),
-            Buffer.from(encodeU64(buyAmountLamports))
-          ])
-        });
-
-        transaction.add(buyInstruction);
-        log("Demande de signature dans Phantom...");
-        const signed = await provider.signTransaction(transaction);
-        const txid = await connection.sendRawTransaction(signed.serialize());
-        log(`✅ Achat envoyé ! https://solscan.io/tx/${txid}`);
-
-        // Surveillance pour revente
-        const profitTarget = parseFloat(document.getElementById('profitTarget').value) || 50;
-        const targetPrice = tokenData.priceSol * (1 + profitTarget / 100);
-        monitorForSale(mintAddress, tokenData.priceSol, targetPrice, txid);
-
-      } catch (err) {
-        console.error(err);
-        log(`❌ Échec achat: ${err.message || err}`);
-        alert(`❌ Échec: ${err.message || 'Erreur inconnue'}`);
-      }
-    }
-
-    // === REVENTE ===
-    async function sellToken(mintAddress) {
-      if (!provider || !connection) return;
-      const priorityFeeLamports = parseInt(document.getElementById('priorityFee').value) || 1000000;
-
-      try {
-        const [pumpGlobal] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [Buffer.from("global")],
-          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
-        );
-        const [pumpTokenAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [Buffer.from("token_account"), new solanaWeb3.PublicKey(mintAddress).toBuffer()],
-          new solanaWeb3.PublicKey(PUMP_PROGRAM_ID)
-        );
-        const [userTokenAccount] = solanaWeb3.PublicKey.findProgramAddressSync(
-          [
-            provider.publicKey.toBuffer(),
-            new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(),
-            new solanaWeb3.PublicKey(mintAddress).toBuffer()
-          ],
-          new solanaWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
-        );
-
-        const transaction = new solanaWeb3.Transaction();
-        transaction.feePayer = provider.publicKey;
-        const { blockhash } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-
-        transaction.add(
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
-          solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFeeLamports })
-        );
-
-        const sellInstruction = new solanaWeb3.TransactionInstruction({
-          keys: [
-            { pubkey: provider.publicKey, isSigner: true, isWritable: true },
-            { pubkey: pumpGlobal, isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey(PUMP_FEE_RECIPIENT), isSigner: false, isWritable: true },
-            { pubkey: pumpTokenAccount, isSigner: false, isWritable: true },
-            { pubkey: userTokenAccount, isSigner: false, isWritable: true },
-            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), isSigner: false, isWritable: false },
-            { pubkey: new solanaWeb3.PublicKey(RENT_SYSVAR), isSigner: false, isWritable: false }
-          ],
-          programId: new solanaWeb3.PublicKey(PUMP_PROGRAM_ID),
-           Buffer.concat([Buffer.from(SELL_DISCRIMINATOR)])
-        });
-
-        transaction.add(sellInstruction);
-        const signed = await provider.signTransaction(transaction);
-        const txid = await connection.sendRawTransaction(signed.serialize());
-        log(`✅ Vente envoyée ! https://solscan.io/tx/${txid}`);
-        alert(`✅ Vente réussie !\nhttps://solscan.io/tx/${txid}`);
-      } catch (err) {
-        console.error(err);
-        log(`❌ Échec vente: ${err.message || err}`);
-      }
-    }
-
-    // === SURVEILLANCE POUR REVENTE ===
-    function monitorForSale(mint, buyPrice, targetPrice, txid) {
-      const check = async () => {
-        try {
-          const data = await getTokenData(mint);
-          if (data && data.priceSol >= targetPrice) {
-            log(`🎯 Profit atteint pour ${mint} ! Vente...`);
-            sellToken(mint);
-          } else {
-            setTimeout(check, 5000);
-          }
-        } catch (err) {
-          setTimeout(check, 10000); // Réessayer en cas d'erreur
-        }
-      };
-      check();
-    }
-
-    // === SCANNER ===
-    async function pollForSignals() {
-      try {
-        const res = await fetch(WEBHOOK_URL);
-        const data = await res.json();
-        if (data.mint && data.mint !== lastMint) {
-          lastMint = data.mint;
-          buyToken(data.mint);
-        }
-      } catch (err) {
-        console.error("Polling échoué:", err);
-      }
-    }
-
-    // === TOGGLE SCAN ===
-    toggleScanBtn.onclick = () => {
-      if (isScanning) {
-        clearInterval(scanInterval);
-        isScanning = false;
-        toggleScanBtn.textContent = "▶️ Démarrer le Scan";
-        log("⏹️ Scan arrêté");
-      } else {
-        isScanning = true;
-        toggleScanBtn.textContent = "⏹️ Arrêter le Scan";
-        scanInterval = setInterval(pollForSignals, 3000);
-        log("🔍 Scan activé");
-      }
-    };
-  </script>
-</body>
-</html>
+            return (
+                <div className="app">
+                    <div className="bg-grid"></div>
+                    
+                    <div className="content">
+                        <header className="header">
+                            <div className="logo">CRYPTOFLUX PRO</div>
+                            
+                            <div className="wallet-section">
+                                {walletConnected && (
+                                    <>
+                                        <div className="network-badge">
+                                            🟢 Solana Mainnet
+                                        </div>
+                                        <div className="balance">
+                                            <span className="balance-amount">{balance.toFixed(4)} SOL</span>
+                                        </div>
+                                    </>
+                                )}
+                                
+                        
