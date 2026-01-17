@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Pump Sniper Pro</title>
-  <!-- ✅ URL corrigée : pas d'espace à la fin -->
+  <!-- ✅ URL corrigée : pas d'espace -->
   <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
   <style>
     :root {
@@ -400,19 +400,19 @@
     }
 
     // ========================================
-    // CONNEXION AU CLIC (CORRIGÉ)
+    // CONNEXION CORRIGÉE (UTILISE window.solana)
     // ========================================
     
     connectBtn.onclick = async () => {
-      // ✅ Vérification au moment du clic
-      if (!window.phantom?.solana?.isPhantom) {
+      // ✅ Vérifie l'API standard Solana
+      if (!window.solana || !window.solana.isPhantom) {
         addLog("❌ Ouvrez cette page dans l'app Phantom → Browser", 'error');
         return;
       }
       
       try {
         addLog("🔄 Connexion...");
-        provider = window.phantom.solana;
+        provider = window.solana; // ← API standard
         
         const { publicKey } = await provider.connect();
         connection = createConnection();
@@ -442,7 +442,6 @@
         const priceData = await getTokenPrice(mint);
         if (!priceData) return null;
         
-        // Estimation liquidité (via supply × prix)
         const supplyRes = await connection.getTokenSupply(new solanaWeb3.PublicKey(mint));
         const totalSupply = supplyRes.value.uiAmount || 0;
         const liquiditySol = priceData.priceSol * totalSupply;
@@ -590,7 +589,6 @@
         updateStats();
         await updateBalance();
         
-        // ✅ ACTIVER LE MODE FOCUS
         const profitTarget = parseFloat(document.getElementById('profitTarget').value) || 100;
         const targetPrice = data.priceSol * (1 + profitTarget / 100);
         currentTrade = { mint, buyPrice: data.priceSol, targetPrice, txid: sig };
