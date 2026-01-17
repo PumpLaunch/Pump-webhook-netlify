@@ -163,6 +163,7 @@
     const addressEl = document.getElementById('address');
     const balanceEl = document.getElementById('balance');
     const positionsEl = document.getElementById('positions');
+    const appEl = document.getElementById('app');
 
     let provider = null;
     let connection = null;
@@ -233,7 +234,7 @@
       }
     }
 
-    // === CONNEXION WALLET ===
+    // === CONNEXION WALLET CORRIGÉE ===
     async function connectWallet() {
       const walletProvider = getProvider();
       if (!walletProvider) {
@@ -242,10 +243,20 @@
       }
 
       try {
+        // Force la déconnexion pour éviter les états fantômes
+        if (typeof walletProvider.disconnect === 'function') {
+          await walletProvider.disconnect().catch(() => {});
+        }
+
         log("Connexion en cours...");
         const { publicKey } = await walletProvider.connect();
-        const pubKeyStr = publicKey.toString();
 
+        if (!publicKey) {
+          log("❌ Aucune clé publique retournée");
+          return;
+        }
+
+        const pubKeyStr = publicKey.toString();
         connection = new solanaWeb3.Connection(RPC_URL, 'confirmed');
         provider = walletProvider;
 
@@ -253,11 +264,7 @@
         appEl.style.display = 'block';
 
         const balance = await getBalance(publicKey);
-        if (balance !== null) {
-          balanceEl.textContent = balance.toFixed(4);
-        } else {
-          balanceEl.textContent = "—";
-        }
+        balanceEl.textContent = balance !== null ? balance.toFixed(4) : "—";
 
         log("✅ Connecté !");
       } catch (err) {
@@ -266,7 +273,7 @@
       }
     }
 
-    // === ACHAT AVEC FILTRES AVANCÉS ===
+    // === ACHAT AVEC FILTRES ===
     async function buyToken(mintAddress) {
       if (!provider || !connection || !provider.publicKey) {
         log("❌ Wallet non connecté");
@@ -407,7 +414,7 @@
       }
     }
 
-    // === REVENTE RÉELLE ===
+    // === REVENTE ===
     async function sellToken(mintAddress) {
       if (!provider || !connection || !provider.publicKey) {
         log("❌ Wallet non connecté");
@@ -486,7 +493,7 @@
       }
     }
 
-    // === SURVEILLANCE POUR REVENTE AUTOMATIQUE ===
+    // === SURVEILLANCE REVENTE ===
     async function monitorPositionForSale(mint) {
       if (!activePositions.has(mint)) return;
 
@@ -532,7 +539,7 @@
       positionsEl.innerHTML = html;
     }
 
-    // === SCANNER EN TEMPS RÉEL ===
+    // === SCANNER ===
     async function pollForSignals() {
       try {
         const res = await fetch(WEBHOOK_URL);
@@ -546,4 +553,36 @@
       }
     }
 
-  
+    // === TOGGLE SCAN ===
+    function toggleScan() {
+      if (isScanning) {
+        clearInterval(scanInterval);
+        isScanning = false;
+        toggleScanBtn.textContent = "▶️ Démarrer le Scan";
+        log("⏹️ Scan arrêté");
+      } else {
+        isScanning = true;
+        toggleScanBtn.textContent = "⏹️ Arrêter le Scan";
+        scanInterval = setInterval(pollForSignals, 3000);
+        log("🔍 Scan activé");
+      }
+    }
+
+    // === INITIALISATION ===
+    // Détecte le wallet après un court délai
+    setTimeout(() => {
+      const provider = getProvider();
+      if (provider) {
+        log("✅ Wallet détecté !");
+        connectBtn.disabled = false;
+        connectBtn.onclick = connectWallet;
+      } else {
+        log("❌ Ouvrez cette page dans l'app Phantom → Browser");
+      }
+    }, 1000);
+
+    toggleScanBtn.onclick = toggleScan;
+    window.sellToken = sellToken;
+  </script>
+</body>
+</html>
